@@ -80,9 +80,9 @@ ewma<TClockGet>::ewma(const ewma<TClockGet> &c) noexcept :
     alpha_(c.alpha_),
     interval_(c.interval_),
     window_(c.window_),
-    rate_(c.rate_),
+    rate_(c.rate_.load(std::memory_order_acq_rel)),
     last_(c.last_),
-    pending_(c.pending_)
+    pending_(c.pending_.load(std::memory_order_acq_rel))
 {
 
 }

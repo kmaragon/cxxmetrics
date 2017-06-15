@@ -8,6 +8,7 @@ set(SOURCES
 set(HEADERS
         counter.hpp
         ewma.hpp
+        meta.hpp
         metric.hpp)
 add_library(cxxmetrics ${SOURCES})
 

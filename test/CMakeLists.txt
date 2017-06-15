@@ -4,6 +4,7 @@ conan_include("conanfile.txt")
 set(SOURCES
         counter_test.cpp
         ewma_test.cpp
+        meter_test.cpp
 )
 
 add_executable(cxxmetrics_test ${SOURCES})
