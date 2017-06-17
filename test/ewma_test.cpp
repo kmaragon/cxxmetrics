@@ -1,24 +1,11 @@
 #include <gtest/gtest.h>
 #include <ewma.hpp>
 #include <thread>
+#include "helpers.hpp"
 
 using namespace std::chrono_literals;
 using namespace cxxmetrics;
 
-struct mock_clock
-{
-    mock_clock(int &ref) : value_(ref)
-    {
-    }
-
-    int operator()() const
-    {
-        return value_;
-    }
-
-private:
-    int &value_;
-};
 
 using mock_ewma = internal::ewma<mock_clock>;
 
@@ -49,38 +36,41 @@ TEST(ewma_test, calculates_fixed_rate)
     int clock = 0;
     mock_ewma e(10, 1, clock);
 
-    for (int i = 0; i <= 20; i++)
+    for (int i = 0; i <= 10; i++)
     {
-        clock++;
         e.mark(7);
+        clock++;
     }
 
-    ASSERT_DOUBLE_EQ(e.rate(), 7.0);
+    ASSERT_EQ(round(e.rate() * 100), 700);
 }
 
 TEST(ewma_test, calculates_fixed_rate_threads)
 {
     ewma e(10ms, 2ms);
 
+    double rate;
     std::vector<std::thread> threads;
 
-    for (int i = 0; i <= 20; i++)
+    for (int i = 0; i <= 10; i++)
     {
-        threads.emplace_back([&e]() {
+        threads.emplace_back([&e, &rate]() {
             for (int x = 0; x < 10; x++)
             {
                 e.mark(7);
-                std::this_thread::sleep_for(2ms);
+                rate = e.rate();
+                std::this_thread::sleep_for(1ms);
             }
         });
+
+
     }
 
     for (auto &thr : threads)
         thr.join();
 
-    auto rate = e.rate();
     std::cout << rate << std::endl;
-    ASSERT_GE(rate, 140.0);
+    ASSERT_GE(rate, 7.0);
 }
 
 TEST(ewma_test, calculates_after_jump_past_window)
@@ -88,13 +78,13 @@ TEST(ewma_test, calculates_after_jump_past_window)
     int clock = 0;
     mock_ewma e(10, 1, clock);
 
-    for (int i = 0; i <= 20; i++)
+    for (int i = 0; i <= 10; i++)
     {
-        clock++;
         e.mark(7);
+        clock++;
     }
 
-    ASSERT_DOUBLE_EQ(e.rate(), 7.0);
+    ASSERT_EQ(round(e.rate() * 100), 700);
 
     clock += 100;
     e.mark(1);
@@ -106,15 +96,15 @@ TEST(ewma_test, calculates_after_jump_in_window)
     int clock = 0;
     mock_ewma e(10, 1, clock);
 
-    for (int i = 0; i <= 20; i++)
+    for (int i = 0; i <= 100; i++)
     {
         clock++;
         e.mark(7);
     }
 
-    ASSERT_DOUBLE_EQ(e.rate(), 7.0);
+    ASSERT_EQ(round(e.rate() * 100), 700);
 
-    clock += 9;
+    clock += 20;
     e.mark(1);
     ASSERT_LT(e.rate(), 1);
 }

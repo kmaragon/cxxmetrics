@@ -20,7 +20,7 @@ public:
  * \brief Base class for a metric
  */
 template<typename TMetricType>
-class metric : internal::metric
+class metric : public virtual internal::metric
 {
 protected:
     metric() = default;

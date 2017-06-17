@@ -10,16 +10,17 @@ namespace cxxmetrics
 /**
  * \brief A counter that counts values
  */
-class counter : public metric<counter>
+template<typename TCount = int64_t>
+class counter : public metric<counter<TCount>>
 {
-    std::atomic_int_fast64_t value_;
+    std::atomic<TCount> value_;
 public:
     /**
      * \brief Construct a counter
      *
      * \param initial_value the initial value of the counter
      */
-    explicit counter(int64_t initial_value = 0) noexcept;
+    explicit counter(TCount initial_value = 0) noexcept;
 
     /**
      * \brief Copy constructor
@@ -46,7 +47,7 @@ public:
      * \param value the value to set the counter to
      * \return a reference to the counter
      */
-    counter &operator=(int64_t value) noexcept;
+    counter &operator=(TCount value) noexcept;
 
     /**
      * \brief increment the counter by the specified value
@@ -55,19 +56,19 @@ public:
      *
      * \return the value of the counter after the increment
      */
-    virtual int64_t incr(int64_t by) noexcept;
+    virtual TCount incr(TCount by) noexcept;
 
     /**
      * \brief Get the current value of the counter
      *
      * \return the current value of the counter
      */
-    int64_t value() const noexcept;
+    TCount value() const noexcept;
 
     /**
      * \brief Convenience cast operator
      */
-    inline operator int64_t() const
+    inline operator TCount() const
     {
         return value();
     }
@@ -90,7 +91,7 @@ public:
      *
      * \return a reference to the counter
      */
-    inline counter &operator+=(int64_t by)
+    inline counter &operator+=(TCount by)
     {
         incr(by);
         return *this;
@@ -114,12 +115,65 @@ public:
      *
      * \return a reference to the counter
      */
-    inline counter &operator-=(int64_t by)
+    inline counter &operator-=(TCount by)
     {
         incr(-by);
         return *this;
     }
 };
+
+template<typename TCount>
+counter<TCount>::counter(TCount initial_value) noexcept:
+        value_(initial_value)
+{}
+
+template<typename TCount>
+counter<TCount>::counter(const counter &c) noexcept :
+        metric<counter<TCount>>(c),
+        value_(c.value_.load(std::memory_order_relaxed))
+{}
+
+template<typename TCount>
+counter<TCount>::counter(counter &&c) noexcept :
+        metric<counter<TCount>>(c),
+        value_(c.value_.load(std::memory_order_relaxed))
+{
+    c.value_ = 0;
+}
+
+template<typename TCount>
+counter<TCount> &counter<TCount>::operator=(const counter<TCount> &c) noexcept
+{
+    value_ = c;
+    return *this;
+}
+
+template<typename TCount>
+counter<TCount> &counter<TCount>::operator=(counter<TCount>  &&c) noexcept
+{
+    value_ = c;
+    c.value_ = 0;
+    return *this;
+}
+
+template<typename TCount>
+counter<TCount> &counter<TCount>::operator=(TCount value) noexcept
+{
+    value_ = value;
+    return *this;
+}
+
+template<typename TCount>
+TCount counter<TCount>::incr(TCount by) noexcept
+{
+    return value_ += by;
+}
+
+template<typename TCount>
+TCount counter<TCount>::value() const noexcept
+{
+    return value_;
+}
 
 }
 

@@ -40,7 +40,7 @@ private:
 
     static double get_alpha(const clock_diff &interval, const clock_diff &window)
     {
-        return exp((interval * -1.0) / window);
+        return 1 - exp((interval * -1.0) / window);
     }
 
     void tick(const clock_point &at) noexcept;
@@ -52,7 +52,7 @@ public:
 
     void mark(int64_t amount) noexcept;
 
-    bool compare_exchange(double expectedrate, double rate) noexcept;
+    bool compare_exchange(double &expectedrate, double rate) noexcept;
 
     double rate() noexcept;
 
@@ -80,9 +80,9 @@ ewma<TClockGet>::ewma(const ewma<TClockGet> &c) noexcept :
     alpha_(c.alpha_),
     interval_(c.interval_),
     window_(c.window_),
-    rate_(c.rate_.load(std::memory_order_acq_rel)),
+    rate_(c.rate_.load(std::memory_order_acquire)),
     last_(c.last_),
-    pending_(c.pending_.load(std::memory_order_acq_rel))
+    pending_(c.pending_.load(std::memory_order_acquire))
 {
 
 }
@@ -98,13 +98,16 @@ void ewma<TClockGet>::mark(int64_t amount) noexcept
 
     // See if we crossed the interval threshold. If so we need to tick
     if ((now - last_) >= interval_)
+    {
+        double expected = 0;
         tick(now);
+    }
 
     pending_ += amount;
 }
 
 template<typename TClockGet>
-bool ewma<TClockGet>::compare_exchange(double expectedrate, double rate) noexcept
+bool ewma<TClockGet>::compare_exchange(double &expectedrate, double rate) noexcept
 {
     return rate_.compare_exchange_strong(expectedrate, rate, std::memory_order_acq_rel);
 }
@@ -112,7 +115,7 @@ bool ewma<TClockGet>::compare_exchange(double expectedrate, double rate) noexcep
 template<typename TClockGet>
 double ewma<TClockGet>::rate() noexcept
 {
-    double rate = rate_.load(std::memory_order_acq_rel);
+    double rate = rate_.load(std::memory_order_acquire);
     if (rate < 0)
         return 0;
 
@@ -126,7 +129,7 @@ double ewma<TClockGet>::rate() noexcept
 template<typename TClockGet>
 double ewma<TClockGet>::rate() const noexcept
 {
-    double rate = rate_.load(std::memory_order_relaxed);
+    double rate = rate_.load(std::memory_order_acquire);
     if (rate < 0)
         return 0;
 
@@ -143,14 +146,15 @@ void ewma<TClockGet>::tick(const clock_point &at) noexcept
         int missed_intervals;
         clock_point last;
 
-        cxxmetrics_ewma_startover:
         pending = pending_.load(std::memory_order_acquire);
+
+    cxxmetrics_ewma_startover:
         rate = rate_.load(std::memory_order_acquire);
         last = last_;
-        if (pending == 0 && rate < 0)
+        if (rate < 0)
         {
             // one thread sets the last timestamp
-            if (rate_.compare_exchange_strong(rate, 0, std::memory_order_release))
+            if (pending_.compare_exchange_strong(pending, 0, std::memory_order_acq_rel) && rate_.compare_exchange_strong(rate, pending, std::memory_order_acq_rel))
                 last_ = at;
             return;
         }
@@ -178,10 +182,10 @@ void ewma<TClockGet>::tick(const clock_point &at) noexcept
             }
         }
 
-        if (!pending_.compare_exchange_strong(pending, 0, std::memory_order_release))
+        if (!pending_.compare_exchange_strong(pending, 0, std::memory_order_acq_rel))
             goto cxxmetrics_ewma_startover;
 
-        rate_.store(rate, std::memory_order_release);
+        rate_.store(rate, std::memory_order_acq_rel);
         last_ = at;
         return;
     }
@@ -205,7 +209,7 @@ ewma<TClockGet> &ewma<TClockGet>::operator=(const ewma<TClockGet> &c) noexcept
  */
 struct steady_clock_point
 {
-    std::chrono::steady_clock::time_point operator()() noexcept
+    std::chrono::steady_clock::time_point operator()() const noexcept
     {
         return std::chrono::steady_clock::now();
     }

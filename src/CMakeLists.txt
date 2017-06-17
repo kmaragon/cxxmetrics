@@ -3,7 +3,6 @@ include(Conan)
 conan_include("conanfile.txt")
 
 set(SOURCES
-        counter.cpp
         ewma.cpp)
 set(HEADERS
         counter.hpp

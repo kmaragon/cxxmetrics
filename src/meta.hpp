@@ -43,9 +43,15 @@ struct static_if_else<false, TTrue, TFalse>
 };
 
 template<duration_type TLeft, duration_type TRight>
-struct is_less_eq
+struct is_less
 {
-    static constexpr bool value = (TLeft <= TRight);
+    static constexpr bool value = (TLeft < TRight);
+};
+
+template<duration_type TLeft, duration_type TRight>
+struct is_greater
+{
+    static constexpr bool value = (TLeft > TRight);
 };
 
 template<duration_type TLeft, duration_type TRight>
@@ -62,43 +68,36 @@ struct static_partition<duration_collection<TPivot, THead, TData...>>
 {
 private:
     using left_ = typename static_partition<duration_collection<TPivot, TData...>>::left;
+    using middle_ = typename static_partition<duration_collection<TPivot, TData...>>::middle;
     using right_ = typename static_partition<duration_collection<TPivot, TData...>>::right;
 public:
-    using left = typename static_if_else<is_less_eq<THead, TPivot>::value, typename static_concat<duration_collection<THead>, left_>::type, left_>::type;
-    using right = typename static_if_else<!is_less_eq<THead, TPivot>::value, typename static_concat<right_, duration_collection<THead>>::type, right_>::type;
+    using left = typename static_if_else<is_less<THead, TPivot>::value, typename static_concat<duration_collection<THead>, left_>::type, left_>::type;
+    using middle = typename static_if_else<are_equal<THead, TPivot>::value, typename static_concat<duration_collection<THead>, middle_>::type, middle_>::type;
+    using right = typename static_if_else<is_greater<THead, TPivot>::value, typename static_concat<duration_collection<THead>, right_>::type, right_>::type;
 };
 
 template<duration_type TPivot>
 struct static_partition<duration_collection<TPivot>>
 {
-    using left = duration_collection<TPivot>;
+    using left = duration_collection<>;
+    using middle = duration_collection<TPivot>;
     using right = duration_collection<>;
 };
 
 template<typename TData>
-struct static_sorter
+struct static_sorter;
+
+template<duration_type...TData>
+struct static_sorter<duration_collection<TData...>>
 {
 private:
-    using partitioned_ = static_partition<TData>;
-    using left_ = typename partitioned_::left;
-    using right_ = typename partitioned_::right;
+    using partitioned_ = static_partition<duration_collection<TData...>>;
 
-    using sorted_left = static_sorter<left_>;
-    using sorted_right = static_sorter<right_>;
+    using left_ = typename static_sorter<typename partitioned_::left>::type;
+    using middle_ = typename partitioned_::middle;
+    using right_ = typename static_sorter<typename partitioned_::right>::type;
 public:
-    using type = typename static_concat<typename sorted_left::type, typename sorted_right::type>::type;
-};
-
-template<duration_type TLeft, duration_type TRight>
-struct static_sorter<duration_collection<TLeft, TRight>>
-{
-    using type = typename static_if_else<is_less_eq<TLeft, TRight>::value, duration_collection<TLeft, TRight>, duration_collection<TRight, TLeft>>::type;
-};
-
-template<duration_type TSingle>
-struct static_sorter<duration_collection<TSingle>>
-{
-    using type = duration_collection<TSingle>;
+    using type = typename static_concat<left_, middle_, right_>::type;
 };
 
 template<>
@@ -113,10 +112,7 @@ struct static_uniq;
 template<duration_type TFirst, duration_type TSecond, duration_type ...TTail>
 struct static_uniq<duration_collection<TFirst, TSecond, TTail...>>
 {
-private:
-    using tail_ = typename static_uniq<duration_collection<TTail...>>::type;
-public:
-    using type = typename static_if_else<are_equal<TFirst, TSecond>::value, typename static_concat<duration_collection<TFirst>, tail_>::type, typename static_concat<duration_collection<TFirst, TSecond>, tail_>::type>::type;
+    using type = typename static_if_else<are_equal<TFirst, TSecond>::value, typename static_uniq<duration_collection<TFirst, TTail...>>::type, typename static_concat<duration_collection<TFirst>, typename static_uniq<duration_collection<TSecond, TTail...>>::type>::type>::type;
 };
 
 template<duration_type TFirst>
@@ -129,6 +125,16 @@ template<>
 struct static_uniq<duration_collection<>>
 {
     using type = duration_collection<>;
+};
+
+template<duration_type ... durations>
+struct sort_unique
+{
+private:
+    using list_ = duration_collection<durations...>;
+    using sorted_ = typename static_sorter<list_>::type;
+public:
+    using type = typename static_uniq<sorted_>::type;
 };
 
 } // templates

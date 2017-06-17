@@ -5,7 +5,7 @@ using namespace cxxmetrics;
 
 TEST(counter_test, incr_and_wrappers_work)
 {
-    counter a(15);
+    counter<int64_t> a(15);
     a += 5;
     ASSERT_EQ(a, 20);
 
@@ -21,5 +21,5 @@ TEST(counter_test, incr_and_wrappers_work)
     a = 10;
     ASSERT_EQ(a, 10);
 
-    ASSERT_EQ(a.metric_type(), "cxxmetrics::counter");
+    ASSERT_EQ(a.metric_type().substr(0, 20), "cxxmetrics::counter<");
 }
