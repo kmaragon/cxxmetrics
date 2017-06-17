@@ -267,7 +267,7 @@ public:
     _meter_impl(const _meter_impl &c) noexcept :
             _meter_impl_base<TClockGet, TWindows...>(c),
             start_(c.start_),
-            total_(c.total_.load(std::memory_order_acquire))
+            total_(c.total_.load())
     {
 
     }
@@ -276,7 +276,7 @@ public:
     {
         _meter_impl_base<TClockGet, TWindows...>::operator=(c);
         start_ = c.start_;
-        total_.store(c.total_.load(std::memory_order_acquire), std::memory_order_release);
+        total_.store(c.total_.load());
     }
 
     inline double mean() const noexcept

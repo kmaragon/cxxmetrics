@@ -130,13 +130,13 @@ counter<TCount>::counter(TCount initial_value) noexcept:
 template<typename TCount>
 counter<TCount>::counter(const counter &c) noexcept :
         metric<counter<TCount>>(c),
-        value_(c.value_.load(std::memory_order_relaxed))
+        value_(c.value_.load())
 {}
 
 template<typename TCount>
 counter<TCount>::counter(counter &&c) noexcept :
         metric<counter<TCount>>(c),
-        value_(c.value_.load(std::memory_order_relaxed))
+        value_(c.value_.load())
 {
     c.value_ = 0;
 }

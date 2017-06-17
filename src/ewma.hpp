@@ -80,9 +80,9 @@ ewma<TClockGet>::ewma(const ewma<TClockGet> &c) noexcept :
     alpha_(c.alpha_),
     interval_(c.interval_),
     window_(c.window_),
-    rate_(c.rate_.load(std::memory_order_acquire)),
+    rate_(c.rate_.load()),
     last_(c.last_),
-    pending_(c.pending_.load(std::memory_order_acquire))
+    pending_(c.pending_.load())
 {
 
 }
@@ -109,13 +109,13 @@ void ewma<TClockGet>::mark(int64_t amount) noexcept
 template<typename TClockGet>
 bool ewma<TClockGet>::compare_exchange(double &expectedrate, double rate) noexcept
 {
-    return rate_.compare_exchange_strong(expectedrate, rate, std::memory_order_acq_rel);
+    return rate_.compare_exchange_strong(expectedrate, rate);
 }
 
 template<typename TClockGet>
 double ewma<TClockGet>::rate() noexcept
 {
-    double rate = rate_.load(std::memory_order_acquire);
+    double rate = rate_.load();
     if (rate < 0)
         return 0;
 
@@ -129,7 +129,7 @@ double ewma<TClockGet>::rate() noexcept
 template<typename TClockGet>
 double ewma<TClockGet>::rate() const noexcept
 {
-    double rate = rate_.load(std::memory_order_acquire);
+    double rate = rate_.load();
     if (rate < 0)
         return 0;
 
@@ -144,18 +144,18 @@ void ewma<TClockGet>::tick(const clock_point &at) noexcept
     int missed_intervals;
     clock_point last;
 
-    pending = pending_.load(std::memory_order_acquire);
+    pending = pending_.load();
 
 cxxmetrics_ewma_startover:
-    rate = rate_.load(std::memory_order_acquire);
+    rate = rate_.load();
     last = last_;
     if (rate < 0)
     {
         // one thread sets the last timestamp
-        if (!pending_.compare_exchange_strong(pending, 0, std::memory_order_acq_rel))
+        if (!pending_.compare_exchange_strong(pending, 0))
             goto cxxmetrics_ewma_startover;
 
-        if (rate_.compare_exchange_strong(rate, pending, std::memory_order_acq_rel))
+        if (rate_.compare_exchange_strong(rate, pending))
         {
             last_ = at;
             return;
@@ -192,10 +192,10 @@ cxxmetrics_ewma_startover:
             rate = rate + (alpha_ * -rate);
     }
 
-    if (!pending_.compare_exchange_strong(pending, 0, std::memory_order_acq_rel))
+    if (!pending_.compare_exchange_strong(pending, 0))
         goto cxxmetrics_ewma_startover;
 
-    rate_.store(rate, std::memory_order_acq_rel);
+    rate_.store(rate);
     last_ = at;
 }
 
@@ -205,8 +205,8 @@ ewma<TClockGet> &ewma<TClockGet>::operator=(const ewma<TClockGet> &c) noexcept
     alpha_ = c.alpha_;
     interval_ = c.interval_;
     window_ = c.window_;
-    rate_.store(c.rate_.load(std::memory_order_acq_rel), std::memory_order_relaxed);
-    pending_.store(c.pending_.load(std::memory_order_acq_rel), std::memory_order_relaxed);
+    rate_.store(c.rate_.load());
+    pending_.store(c.pending_.load());
     last_ = c.last_;
     return *this;
 }

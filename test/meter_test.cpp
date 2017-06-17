@@ -36,7 +36,7 @@ TEST(meter_test, copy_assignment_works)
 
 TEST(meter_test, all_rates_are_passed_on)
 {
-    int clock;
+    int clock = 0;
     mock_clock clk(clock);
 
     internal::_meter_impl<true, mock_clock, 1, 8, 20, 50> m(1, clk);
