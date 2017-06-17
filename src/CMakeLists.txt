@@ -7,8 +7,12 @@ set(SOURCES
 set(HEADERS
         counter.hpp
         ewma.hpp
+        gauge.hpp
         meta.hpp
-        metric.hpp)
+        metric.hpp
+        tag_set.hpp
+        time.hpp
+)
 add_library(cxxmetrics ${SOURCES})
 
 install(FILES ${HEADERS} DESTINATION "include")
