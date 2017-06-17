@@ -3,6 +3,7 @@ project(cxxmetrics)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 
 add_subdirectory(src)
 add_subdirectory(test)

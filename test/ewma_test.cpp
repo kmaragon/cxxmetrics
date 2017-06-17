@@ -104,7 +104,7 @@ TEST(ewma_test, calculates_after_jump_in_window)
 
     ASSERT_EQ(round(e.rate() * 100), 700);
 
-    clock += 20;
+    clock += 40;
     e.mark(1);
     ASSERT_LT(e.rate(), 1);
 }

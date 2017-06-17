@@ -139,56 +139,64 @@ double ewma<TClockGet>::rate() const noexcept
 template<typename TClockGet>
 void ewma<TClockGet>::tick(const clock_point &at) noexcept
 {
-    while (true)
+    int64_t pending;
+    double rate;
+    int missed_intervals;
+    clock_point last;
+
+    pending = pending_.load(std::memory_order_acquire);
+
+cxxmetrics_ewma_startover:
+    rate = rate_.load(std::memory_order_acquire);
+    last = last_;
+    if (rate < 0)
     {
-        int64_t pending;
-        double rate;
-        int missed_intervals;
-        clock_point last;
-
-        pending = pending_.load(std::memory_order_acquire);
-
-    cxxmetrics_ewma_startover:
-        rate = rate_.load(std::memory_order_acquire);
-        last = last_;
-        if (rate < 0)
-        {
-            // one thread sets the last timestamp
-            if (pending_.compare_exchange_strong(pending, 0, std::memory_order_acq_rel) && rate_.compare_exchange_strong(rate, pending, std::memory_order_acq_rel))
-                last_ = at;
-            return;
-        }
-
-        // make sure that last_ didn't catch up with us
-        if ((at - last) < interval_)
-            return;
-
-        // apply the pending value to our current rate
-        // if someone else already snagged the pending value, start over
-        rate = rate + (alpha_ * (pending - rate));
-
-        // figure out how many intervals we've missed
-        missed_intervals = ((at - last) / interval_) - 1;
-
-        if (missed_intervals)
-        {
-            // we missed some intervals - we'll average in zeros
-            if ((at - last) > window_)
-                rate = 0;
-            else
-            {
-                for (int i = 0; i < missed_intervals; i++)
-                    rate = rate + (alpha_ * -rate);
-            }
-        }
-
+        // one thread sets the last timestamp
         if (!pending_.compare_exchange_strong(pending, 0, std::memory_order_acq_rel))
             goto cxxmetrics_ewma_startover;
 
-        rate_.store(rate, std::memory_order_acq_rel);
-        last_ = at;
-        return;
+        if (rate_.compare_exchange_strong(rate, pending, std::memory_order_acq_rel))
+        {
+            last_ = at;
+            return;
+        }
     }
+
+    // make sure that last_ didn't catch up with us
+    if ((at - last) < interval_)
+        return;
+
+    // apply the pending value to our current rate
+    // if someone else already snagged the pending value, start over
+    rate = rate + (alpha_ * (pending - rate));
+
+    // figure out how many intervals we've missed
+    missed_intervals = ((at - last) / interval_) - 1;
+
+    if (missed_intervals)
+    {
+        // we missed some intervals - we'll average in zeros
+        if ((at - last) > window_)
+        {
+            while ((at - last) > window_)
+            {
+                rate = sqrt(rate);
+                last += window_;
+            }
+
+            // figure out the missed intervals now
+            missed_intervals = ((at - last) / interval_) - 1;
+        }
+
+        for (int i = 0; i < missed_intervals; i++)
+            rate = rate + (alpha_ * -rate);
+    }
+
+    if (!pending_.compare_exchange_strong(pending, 0, std::memory_order_acq_rel))
+        goto cxxmetrics_ewma_startover;
+
+    rate_.store(rate, std::memory_order_acq_rel);
+    last_ = at;
 }
 
 template<typename TClockGet>
