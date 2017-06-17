@@ -10,8 +10,10 @@ set(HEADERS
         gauge.hpp
         meta.hpp
         metric.hpp
+        reservoir.hpp
         tag_set.hpp
         time.hpp
+        uniform_reservoir.hpp
 )
 add_library(cxxmetrics ${SOURCES})
 
