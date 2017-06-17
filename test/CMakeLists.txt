@@ -6,6 +6,7 @@ set(SOURCES
         ewma_test.cpp
         gauge_test.cpp
         meter_test.cpp
+        reservoir_test.cpp
 )
 
 add_executable(cxxmetrics_test ${SOURCES})
