@@ -57,7 +57,7 @@ public:
     /**
      * \brief Update the unform reservoir with a value
      */
-    void update(TElem) noexcept;
+    void update(const TElem &v) noexcept;
 
     /**
      * \brief Get a snapshot of the reservoir
@@ -94,7 +94,7 @@ uniform_reservoir<TElem, TSize> &uniform_reservoir<TElem, TSize>::operator=(cons
 }
 
 template<typename TElem, int64_t TSize>
-void uniform_reservoir<TElem, TSize>::update(TElem value) noexcept
+void uniform_reservoir<TElem, TSize>::update(const TElem &value) noexcept
 {
     auto c = count_.fetch_add(1);
 
