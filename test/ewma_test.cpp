@@ -57,7 +57,7 @@ TEST(ewma_test, calculates_fixed_rate_threads)
         threads.emplace_back([&e, &rate]() {
             for (int x = 0; x < 10; x++)
             {
-                e.mark(7);
+                e.mark(5);
                 rate = e.rate();
                 std::this_thread::sleep_for(1ms);
             }
@@ -69,8 +69,8 @@ TEST(ewma_test, calculates_fixed_rate_threads)
     for (auto &thr : threads)
         thr.join();
 
-    std::cout << rate << std::endl;
-    ASSERT_GE(rate, 7.0);
+    std::cout << rate << " (" << (rate * 100) << " marks per second)" << std::endl;
+    ASSERT_GE(rate, 5.0);
 }
 
 TEST(ewma_test, calculates_after_jump_past_window)

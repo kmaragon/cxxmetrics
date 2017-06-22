@@ -55,7 +55,7 @@ namespace reservoirs
 template<typename TElem, int TSize>
 class snapshot
 {
-    std::array<TElem, TSize> values_;
+    TElem values_[TSize];
     int count_;
 public:
     /**
@@ -65,7 +65,7 @@ public:
      * \param end the end of the collection
      */
     template <class TInputIterator>
-    snapshot(TInputIterator &begin, const TInputIterator &end) noexcept;
+    snapshot(TInputIterator begin, const TInputIterator &end) noexcept;
 
     /**
      * \brief Construct a snapshot with the c style array
@@ -155,14 +155,14 @@ public:
 
 template<typename TElem, int TSize>
 template<typename TInputIterator>
-snapshot<TElem, TSize>::snapshot(TInputIterator &begin, const TInputIterator &end) noexcept
+snapshot<TElem, TSize>::snapshot(TInputIterator begin, const TInputIterator &end) noexcept
 {
     int at = 0;
     for (; begin != end && at < TSize; ++begin)
         values_[at++] = *begin;
 
     count_ = at;
-    std::sort(values_.begin(), values_.begin()+count_);
+    std::sort(&values_[0], &values_[0] + count_);
 }
 
 template<typename TElem, int TSize>
@@ -173,7 +173,7 @@ snapshot<TElem, TSize>::snapshot(const TElem *a, int count) noexcept
         values_[at] = a[at];
 
     count_ = at;
-    std::sort(values_.begin(), values_.begin()+count_);
+    std::sort(&values_[0], &values_[count_]);
 }
 
 }

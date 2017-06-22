@@ -1,29 +1,55 @@
-#ifndef CXXMETRICS_CIRCULAR_RESERVOIR_HPP
-#define CXXMETRICS_CIRCULAR_RESERVOIR_HPP
+#ifndef CXXMETRICS_SIMPLE_RESERVOIR_HPP
+#define CXXMETRICS_XIMPLE_RESERVOIR_HPP
+
+#include "ringbuf.hpp"
+#include "reservoir.hpp"
+
+namespace cxxmetrics
+{
 
 /**
- * \brief A type of reservoir that keeps elements in precise order in a circular buffer
- *
- * This can be used as is for a super simple non-uniform distribution. But more reasonably, it serves
- * a foundation for implementations of sliding window and exponentially decaying reservoirs
+ * \brief A type of reservoir that simply keep the TSize most recent values
  */
-template<typename TElem, int64_T TSize>
+template<typename TElem, size_t TSize>
 class simple_reservoir
 {
-    std::array<TElem, TSize> elems_;
-    std::atomic_int_fast64_t head_;
-    std::atomic_int_fast64_t tail_;
+    ringbuf<TElem, TSize> data_;
 
 public:
+    simple_reservoir() noexcept = default;
 
-    bool update_if(const TElem &value, const std::function<bool(const TElem &last)> &last);
+    simple_reservoir(const simple_reservoir &other) noexcept = default;
 
-    inline void update(const TElem &value)
+    ~simple_reservoir() = default;
+
+    /**
+     * \brief Assignment operator
+     */
+    simple_reservoir &operator=(const simple_reservoir &r) noexcept = default;
+
+    /**
+     * \brief Update the simple reservoir with a value
+     */
+    void update(const TElem &v) noexcept;
+
+    /**
+     * \brief Get a snapshot of the reservoir
+     *
+     * \return a reservoir
+     */
+    inline auto snapshot() const noexcept
     {
-        update_if(value, [](const TElem &) { return true; });
+        return reservoirs::snapshot<TElem, TSize>(data_.begin(), data_.end());
     }
 
-    bool shift_if(const std::function<bool(const TElem &)> &fn);
 };
 
-#endif //CXXMETRICS_CIRCULAR_RESERVOIR_HPP
+template<typename TElem, size_t TSize>
+void simple_reservoir<TElem, TSize>::update(const TElem &v) noexcept
+{
+    data_.push(v);
+}
+
+}
+
+#endif //CXXMETRICS_SIMPLE_RESERVOIR_HPP

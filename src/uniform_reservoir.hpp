@@ -19,7 +19,7 @@ template<typename TElem, int64_t TSize>
 class uniform_reservoir
 {
     std::default_random_engine gen_;
-    std::array<TElem, TSize> elems_;
+    TElem elems_[TSize];
     std::atomic_int_fast64_t count_;
 
     static unsigned generate_seed() noexcept
@@ -66,7 +66,7 @@ public:
      */
     inline auto snapshot() const noexcept
     {
-        return reservoirs::snapshot<TElem, TSize>(elems_.begin(), std::min(count_.load(), TSize));
+        return reservoirs::snapshot<TElem, TSize>(&elems_[0], std::min(count_.load(), TSize));
     }
 };
 
@@ -80,9 +80,10 @@ uniform_reservoir<TElem, TSize>::uniform_reservoir() noexcept :
 template<typename TElem, int64_t TSize>
 uniform_reservoir<TElem, TSize>::uniform_reservoir(const uniform_reservoir &other) noexcept :
         gen_(generate_seed()),
-        elems_(other.elems_),
         count_(other.count_.load())
 {
+    for (auto i = 0; i < count_; i++)
+        elems_[i] = other.elems_[i];
 }
 
 template<typename TElem, int64_t TSize>
@@ -98,7 +99,7 @@ void uniform_reservoir<TElem, TSize>::update(const TElem &value) noexcept
 {
     auto c = count_.fetch_add(1);
 
-    if (c < elems_.size())
+    if (c < TSize)
     {
         elems_[c] = value;
         return;
