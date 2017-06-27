@@ -13,7 +13,7 @@ namespace cxxmetrics
 template<typename TElem, size_t TSize>
 class simple_reservoir
 {
-    ringbuf<TElem, TSize> data_;
+    internal::ringbuf<TElem, TSize> data_;
 
 public:
     simple_reservoir() noexcept = default;

@@ -2,7 +2,7 @@
 #include <ringbuf.hpp>
 
 using namespace std;
-using namespace cxxmetrics;
+using namespace cxxmetrics::internal;
 
 TEST(ringbuf_test, can_push_full_circle)
 {

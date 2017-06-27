@@ -148,12 +148,12 @@ private:
 
     class transform_iterator : public std::iterator<TElem, std::input_iterator_tag>
     {
-        typename ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator it_;
+        typename internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator it_;
     public:
         transform_iterator() = default;
 
         transform_iterator(
-                const typename ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator &real) noexcept
+                const typename internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator &real) noexcept
                 : it_(real) {}
 
         transform_iterator(const transform_iterator &other) = default;
@@ -173,7 +173,7 @@ private:
 
     TClockGet clock_;
     window_type window_;
-    ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize> data_;
+    internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize> data_;
 
 public:
     /**

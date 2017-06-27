@@ -7,6 +7,9 @@
 namespace cxxmetrics
 {
 
+namespace internal
+{
+
 /**
  * \brief A simple fixed-size ring buffer implementation because there still isn't one in C++17
  *
@@ -43,14 +46,19 @@ public:
         using value_type = TElemType;
 
         iterator() noexcept;
+
         iterator(const ringbuf *rb, int64_t offset = 0) noexcept;
+
         iterator(const iterator &it) noexcept = default;
 
         iterator &operator=(const iterator &other) noexcept = default;
 
         bool operator==(const iterator &other) const noexcept;
+
         bool operator!=(const iterator &other) const noexcept;
+
         iterator &operator++() noexcept;
+
         const TElemType *operator->() const noexcept;
 
         inline TElemType operator*() const noexcept
@@ -79,6 +87,7 @@ public:
      * \brief Copy constructor
      */
     ringbuf(const ringbuf &other) noexcept;
+
     ~ringbuf() = default;
 
     /**
@@ -146,20 +155,21 @@ private:
 
         return false;
     }
+
     friend class iterator;
 };
 
 template<typename TElemType, size_t TSize>
 ringbuf<TElemType, TSize>::iterator::iterator() noexcept :
-    buf_(nullptr),
-    offset_(-1),
-    headat_(0)
+        buf_(nullptr),
+        offset_(-1),
+        headat_(0)
 {
 };
 
 template<typename TElemType, size_t TSize>
 ringbuf<TElemType, TSize>::iterator::iterator(const ringbuf *rb, int64_t offset) noexcept :
-    buf_(rb)
+        buf_(rb)
 {
     int64_t head = rb->head_.load();
     while (true)
@@ -442,6 +452,8 @@ size_t ringbuf<TElemType, TSize>::size() const noexcept
 
     return ready - head;
 };
+
+}
 
 }
 
