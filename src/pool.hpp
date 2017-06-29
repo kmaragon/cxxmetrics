@@ -172,7 +172,16 @@ public:
      *
      * \return whether or not the compare/exchange succeeded
      */
-    bool compare_exchange_strong(pool_ptr &ptr, const pool_ptr &other, std::memory_order order = std::memory_order_seq_cst);
+    bool compare_exchange_strong(pool_ptr &ptr, const pool_ptr &other, std::memory_order order = std::memory_order_seq_cst) noexcept;
+
+    /**
+     * Do an atomic exchange where the value is set to nptr and the previous value is returned
+     *
+     * \param ndata the new pointer value to swap in
+     *
+     * \return the previous value of the ptr
+     */
+    pool_ptr exchange(const pool_ptr &nptr, std::memory_order order = std::memory_order_seq_cst) noexcept;
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
@@ -382,7 +391,7 @@ bool pool_ptr<TValue, TAlloc>::operator!=(const pool_ptr &other) const noexcept
 }
 
 template<typename TValue, template<typename ...> class TAlloc>
-bool pool_ptr<TValue, TAlloc>::compare_exchange_strong(pool_ptr &ptr, const pool_ptr &other, std::memory_order order)
+bool pool_ptr<TValue, TAlloc>::compare_exchange_strong(pool_ptr &ptr, const pool_ptr &other, std::memory_order order) noexcept
 {
     auto origvalue = ptr.dat_.load();
     auto oldvalue = origvalue;
@@ -412,6 +421,15 @@ bool pool_ptr<TValue, TAlloc>::compare_exchange_strong(pool_ptr &ptr, const pool
     return false;
 }
 
+template<typename TValue, template<typename ...> class TAlloc>
+pool_ptr<TValue, TAlloc> pool_ptr<TValue, TAlloc>::exchange(const pool_ptr &nptr, std::memory_order order) noexcept
+{
+    auto newvalue = nptr.dat_.load();
+    if (newvalue && !newvalue->add_reference())
+        newvalue = nullptr;
+    auto oldvalue = dat_.exchange(newvalue, order);
+    return pool_ptr(oldvalue);
+}
 }
 
 }

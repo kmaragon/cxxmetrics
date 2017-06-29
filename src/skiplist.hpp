@@ -1,8 +1,6 @@
 #ifndef CXXMETRICS_SKIPLIST_HPP_HPP
 #define CXXMETRICS_SKIPLIST_HPP_HPP
 
-#define CXXMETRICS_DISABLE_POOLING
-
 #include "pool.hpp"
 #include <random>
 
@@ -50,15 +48,23 @@ public:
     node_ptr tail_;
     pool<node> node_pool;
 
+    _skiplist_data()
+    { }
+
+    _skiplist_data(_skiplist_data &&other)
+    {
+        auto ptail = other.tail_;
+        auto otherhead = other.head_.exchange(nullptr);
+        other.tail_ = nullptr;
+        other.set_tail_if_last(nullptr);
+
+        head_ = std::move(otherhead);
+        set_tail_if_last(ptail);
+    }
+
     ~_skiplist_data()
     {
-        auto cur = head_;
-        while (cur)
-        {
-            // allow 'gc' to happen on our nodes
-            cur->previous = nullptr;
-            cur = cur->next[0];
-        }
+        clear_all();
     }
 
     pool_ptr<node> create_node(int16_t level, const TValue &value) noexcept
@@ -99,6 +105,19 @@ public:
         return std::move(more);
     }
 
+    node_ptr scan_last(int level, const node_ptr &hint)
+    {
+        auto last = hint;
+        auto more = next(level, last);
+        while (more)
+        {
+            last = more;
+            more = next(level, last);
+        }
+
+        return std::move(last);
+    }
+
     std::pair<node_ptr, node_ptr> find_insert_loc(const TValue &value, std::array<node_ptr, TWidth> &saved)
     {
         if (!cmp_(head_->value, value))
@@ -117,19 +136,95 @@ public:
         return std::make_pair(std::move(less), std::move(more));
     }
 
+    void clear_all() noexcept
+    {
+        auto cur = head_.exchange(nullptr);
+        while (cur)
+        {
+            // allow 'gc' to happen on our nodes
+            cur->previous = nullptr;
+            cur = cur->next[0];
+        }
+
+        set_tail_if_last(nullptr);
+    }
+
+    node_ptr front() noexcept
+    {
+        return head_;
+    }
+
+    node_ptr back() noexcept
+    {
+        auto cur = tail_;
+        while (cur)
+        {
+            auto nxt = next(0, cur);
+            if (!nxt)
+                return std::move(cur);
+
+            cur = nxt;
+        }
+
+        return nullptr;
+    }
+
+    node_ptr previous(const node_ptr node) noexcept
+    {
+        auto prev = node->previous;
+        if (!prev)
+            prev = head_;
+
+        if (!prev || !cmp_(prev->value, node->value))
+            return nullptr;
+
+        scan_values(0, prev, node);
+        return prev;
+    }
+
     node_ptr help_delete(int level, node_ptr &node) noexcept
     {
 
     }
 
-    void set_previous(const node_ptr &hint, node_ptr &node)
+    void set_previous(const node_ptr &hint, node_ptr &node) noexcept
     {
-
+        auto pprev = node->previous;
+        auto nprev = hint;
+        while (true)
+        {
+            auto npnext = scan_values(0, nprev, node->value);
+            if (node->previous.compare_exchange_strong(pprev, nprev))
+                return;
+        }
     }
 
-    void set_tail_if_last(node_ptr &node)
+    void set_tail_if_last(const node_ptr &hint) noexcept
     {
+        auto tail_at_scan = tail_;
+        while (true)
+        {
+            auto cur = hint;
+            if (!cur)
+            {
+                cur = head_;
+                if (!cur)
+                {
+                    if (tail_.compare_exchange_strong(tail_at_scan, nullptr))
+                        return;
+                }
+            }
 
+            // just in case it changed since our check
+            tail_at_scan = tail_;
+            for (int i = TWidth - 1; i >= 0; i--)
+                cur = scan_last(i, cur);
+
+            // make sure the tail didn't change during or after our scan
+            // and set it accordingly
+            if (tail_.compare_exchange_strong(tail_at_scan, cur))
+                return;
+        }
     }
 
 };
@@ -166,7 +261,7 @@ public:
         node_ptr node_;
         bool end_;
 
-        iterator(skiplist *list, node_ptr node) noexcept;
+        iterator(skiplist *list, const node_ptr &node) noexcept;
 
         friend class skiplist;
     public:
@@ -185,17 +280,95 @@ public:
         const TValue &operator*() const noexcept;
     };
 
+    using forward_iterator = iterator<true>;
+    using reverse_iterator = iterator<false>;
+
+    /**
+     * \brief Default constructor
+     */
+    skiplist() noexcept;
+
+    /**
+     * \brief Construct A skiplist and fill it with the specified data
+     *
+     * \tparam TInputIterator The type of iterator that supplies the data
+     *
+     * \param begin The begin iterator
+     * \param end the end iterator
+     */
+    template<typename TInputIterator>
+    skiplist(TInputIterator begin, const TInputIterator &end) noexcept;
+
+    /**
+     * \brief Copy constructor
+     */
+    skiplist(const skiplist &other) noexcept;
+
+    /**
+     * \brief Move constructor
+     */
+    skiplist(skiplist &&other) noexcept;
+
+    ~skiplist() = default;
+
+    /**
+     * \brief Assignment Operator
+     */
+    skiplist &operator=(const skiplist &other) noexcept;
+
+    /**
+     * \brief Move Assignment operator
+     */
+    skiplist &operator=(skiplist &&other) noexcept;
+
     /**
      * \brief Insert an item into the skiplist
      *
      * \param value the value to insert into the list
      */
     void insert(const TValue &value) noexcept;
+
+    /**
+     * \brief Clear out all entries in the skiplist
+     */
+    void clear() noexcept;
+
+    /**
+     * \brief Get a forward iterator into the skiplist
+     *
+     * \return a forward iterator into the skiplist
+     */
+    forward_iterator begin() noexcept;
+
+    /**
+     * \brief Get a reverse iterator into the skiplist
+     *
+     * \return a reverse iterator into the skiplist
+     */
+    reverse_iterator rbegin() noexcept;
+
+    /**
+     * \brief Get the end of the list for a forward iterator
+     *
+     * \return the end of the list
+     */
+    forward_iterator end() noexcept;
+
+    /**
+     * \brief Get the end of the list for a reverse iterator
+     *
+     * \return the end of the list
+     */
+    reverse_iterator rend() noexcept;
+
+protected:
+    friend class iterator<true>;
+    friend class iterator<false>;
 };
 
 template<typename TValue, uint16_t TWidth, typename TLess>
 template<bool TFwd>
-skiplist<TValue, TWidth, TLess>::iterator<TFwd>::iterator(skiplist *list, node_ptr node) noexcept :
+skiplist<TValue, TWidth, TLess>::iterator<TFwd>::iterator(skiplist *list, const node_ptr &node) noexcept :
         list_(list),
         node_(node),
         end_(node)
@@ -227,9 +400,9 @@ skiplist<TValue, TWidth, TLess>::iterator<TFwd> &skiplist<TValue, TWidth, TLess>
 
     auto node = node_;
     if (TFwd)
-        node_ = node ? node->next() : nullptr;
+        node_ = node ? list_->next(0, node) : nullptr;
     else
-        node_ = node ? node->previous() : nullptr;
+        node_ = node ? list_->previous(node) : nullptr;
 
     if (!node_)
         end_ = true;
@@ -257,9 +430,9 @@ skiplist<TValue, TWidth, TLess>::iterator<TFwd> &skiplist<TValue, TWidth, TLess>
 
     auto node = node_;
     if (TFwd)
-        node_ = node ? node->previous() : nullptr;
+        node_ = node ? list_->previous(node) : nullptr;
     else
-        node_ = node ? node->next() : nullptr;
+        node_ = node ? list_->next(0, node) : nullptr;
 
     return *this;
 }
@@ -296,6 +469,61 @@ const TValue &skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator*() const
 
 template<typename TValue, uint16_t TWidth, typename TLess>
 std::default_random_engine skiplist<TValue, TWidth, TLess>::rnd_;
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+skiplist<TValue, TWidth, TLess>::skiplist() noexcept
+{ }
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+template<typename TInputIterator>
+skiplist<TValue, TWidth, TLess>::skiplist(TInputIterator begin, const TInputIterator &end) noexcept
+{
+    for (; begin != end; ++begin)
+        insert(*begin);
+}
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+skiplist<TValue, TWidth, TLess>::skiplist(const skiplist &other) noexcept :
+        skiplist(other.rbegin(), other.rend())
+{ }
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+skiplist<TValue, TWidth, TLess>::skiplist(skiplist &&other) noexcept :
+        ::cxxmetrics::internal::_skiplist_data<TValue, TWidth, TLess>(std::move(other))
+{ }
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+skiplist<TValue, TWidth, TLess> &skiplist<TValue, TWidth, TLess>::operator=(const skiplist &other) noexcept
+{
+    clear();
+
+    for (auto v = other.rbegin(); v != other.rend(); ++v)
+        insert(*v);
+
+    return *this;
+}
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+skiplist<TValue, TWidth, TLess> &skiplist<TValue, TWidth, TLess>::operator=(skiplist &&other) noexcept
+{
+    auto ptail = other.tail_;
+    auto otherhead = other.head_.exchange(nullptr);
+    other.tail_ = nullptr;
+    other.set_tail_if_last(nullptr);
+
+    while (true)
+    {
+        clear();
+        node_ptr expected = nullptr;
+        if (this->head_.compare_exchange_strong(expected, otherhead))
+            break;
+
+        // someone stuck a head in clear and try again
+    }
+
+    set_tail_if_last(ptail);
+    return *this;
+}
 
 template<typename TValue, uint16_t TWidth, typename TLess>
 void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
@@ -337,7 +565,7 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
         // case 3: value is the new head
         if (!insertloc.first)
         {
-            nnode->next[0] = head;
+            nnode->next[0] = insertloc.second;
             nnode->previous = nullptr;
             if (this->head_.compare_exchange_strong(head, nnode))
             {
@@ -367,7 +595,8 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
         {
             // we successfully inserted it in between first and second.
             // atomically resolve the previous
-            this->set_previous(nnode, insertloc.second);
+            if (insertloc.second)
+                this->set_previous(nnode, insertloc.second);
 
             // and atomically set the tail if necessary
             this->set_tail_if_last(nnode);
@@ -399,6 +628,36 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
                 break;
         }
     }
+}
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+void skiplist<TValue, TWidth, TLess>::clear() noexcept
+{
+    this->clear_all();
+};
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+typename skiplist<TValue, TWidth, TLess>::forward_iterator skiplist<TValue, TWidth, TLess>::begin() noexcept
+{
+    return forward_iterator(this, this->front());
+}
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+typename skiplist<TValue, TWidth, TLess>::reverse_iterator skiplist<TValue, TWidth, TLess>::rbegin() noexcept
+{
+    return reverse_iterator(this, this->back());
+}
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+typename skiplist<TValue, TWidth, TLess>::forward_iterator skiplist<TValue, TWidth, TLess>::end() noexcept
+{
+    return forward_iterator(this, nullptr);
+}
+
+template<typename TValue, uint16_t TWidth, typename TLess>
+typename skiplist<TValue, TWidth, TLess>::reverse_iterator skiplist<TValue, TWidth, TLess>::rend() noexcept
+{
+    return reverse_iterator(this, nullptr);
 }
 
 }
