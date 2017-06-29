@@ -6,6 +6,7 @@ set(SOURCES
         ewma_test.cpp
         gauge_test.cpp
         meter_test.cpp
+        pool_test.cpp
         reservoir_test.cpp
         ringbuf_test.cpp
         skiplist_test.cpp

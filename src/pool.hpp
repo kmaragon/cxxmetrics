@@ -1,6 +1,8 @@
 #ifndef CXXMETRICS_POOL_HPP
 #define CXXMETRICS_POOL_HPP
 
+#include <atomic>
+
 namespace cxxmetrics
 {
 
@@ -10,254 +12,404 @@ namespace internal
 template<typename TValue, template<typename ...> class TAlloc = std::allocator>
 class pool;
 
-template<typename TValue>
-struct _pool_data
-{
-    TValue value;
-    struct _pool_data *next;
-};
-
-template<typename TValue>
+/**
+ * \brief A *_ptr style handle that is reference counted and recycled from a pool
+ *
+ * \tparam TValue The type of value in the ptr
+ * \tparam TAlloc The allocator that the pool from whence the ptr derives uses to allocate
+ */
+template<typename TValue, template<typename ...> class TAlloc = std::allocator>
 class pool_ptr
 {
-    ::cxxmetrics::internal::_pool_data<TValue> *dat_;
-public:
-    pool_ptr(::cxxmetrics::internal::_pool_data<TValue> *data) noexcept :
-            dat_(data)
-    {}
+    struct pool_data
+    {
+        typename std::aligned_storage<sizeof(TValue)>::type tv;
+        std::atomic<pool_data *> next;
+        pool<TValue, TAlloc> *source;
 
-    pool_ptr() noexcept :
-        dat_(nullptr)
+        pool_data(pool<TValue, TAlloc> *src, pool_data *n) :
+                source(src),
+                next(n)
+        { }
+
+        TValue &value()
+        {
+            return *reinterpret_cast<TValue*>(std::addressof(tv));
+        }
+
+        bool is_counted() const
+        {
+            return next.load() & 1;
+        }
+
+        bool add_reference()
+        {
+            pool_data *ptr = next.load();
+            while (true)
+            {
+                // make sure we are counting and we have a count already
+                if ((reinterpret_cast<unsigned long>(ptr) & 1) && (reinterpret_cast<unsigned long>(ptr) & ~((unsigned long)1)))
+                {
+                    auto *incr = reinterpret_cast<pool_data *>(reinterpret_cast<unsigned long>(ptr) + 0x10);
+                    if (next.compare_exchange_strong(ptr, incr))
+                        return true;
+                }
+                else
+                    break;
+            }
+
+            return false;
+        }
+
+        void remove_reference()
+        {
+            pool_data *ptr = next.load();
+            while (true)
+            {
+                if ((reinterpret_cast<unsigned long>(ptr) & 1) && (reinterpret_cast<unsigned long>(ptr) & ~((unsigned long)1)))
+                {
+                    auto *decr = reinterpret_cast<pool_data *>(reinterpret_cast<unsigned long>(ptr) - 0x10);
+                    if (decr == reinterpret_cast<pool_data*>(1))
+                        decr = 0;
+                    if (next.compare_exchange_strong(ptr, decr))
+                    {
+                        if (decr == 0)
+                            source->finish(this);
+                        return;
+                    }
+                }
+                else
+                    return;
+            }
+        }
+    };
+
+    std::atomic<pool_data *> dat_;
+
+    pool_ptr(pool_data *data) noexcept;
+    friend class pool<TValue, TAlloc>;
+public:
+    /**
+     * \brief Construct a null pool pointer
+     */
+    constexpr pool_ptr() noexcept :
+            dat_(nullptr)
     { }
 
-    pool_ptr(const pool_ptr &cp) = default;
+    /**
+     * \brief Convenience wrapper to assign nullptr to pool_ptr instances
+     */
+    constexpr pool_ptr(nullptr_t ptr) noexcept :
+            pool_ptr()
+    { }
 
-    ~pool_ptr() = default;
+    /**
+     * \brief Copy constructor
+     */
+    pool_ptr(const pool_ptr &cpy) noexcept;
 
-    pool_ptr &operator=(const pool_ptr &cp) = default;
+    /**
+     * \brief Move constructor
+     */
+    pool_ptr(pool_ptr &&mv) noexcept;
 
-    TValue *operator->() noexcept
-    {
-        return &dat_->value;
-    }
+    /**
+     * \brief destructor
+     */
+    ~pool_ptr();
 
-    TValue &operator*() noexcept
-    {
-        return dat_->value;
-    }
+    /**
+     * \brief Assignment operator
+     */
+    pool_ptr &operator=(const pool_ptr &ptr) noexcept;
 
-    const TValue *operator->() const noexcept
-    {
-        return &dat_->value;
-    }
+    /**
+     * \brief Assignment move operator
+     */
+    pool_ptr &operator=(pool_ptr &&mv) noexcept;
 
-    TValue &operator*() const noexcept
-    {
-        return dat_->value;
-    }
-
-    operator bool() const noexcept
-    {
-        return dat_ != nullptr;
-    }
-
-    ::cxxmetrics::internal::_pool_data<TValue> *ptr()
-    {
-        return dat_;
-    }
-
-    const ::cxxmetrics::internal::_pool_data<TValue> *ptr() const
-    {
-        return dat_;
-    }
-};
-
-// a unique pointer from a pool that is returned to the pool when it goes out of scope
-template<typename TValue, template<typename ...> class TAlloc = std::allocator>
-class unique_pool_ptr
-{
-    ::cxxmetrics::internal::_pool_data<TValue> *dat_;
-    pool<TValue, TAlloc> *pool_;
-public:
-    unique_pool_ptr() noexcept;
-
-    unique_pool_ptr(::cxxmetrics::internal::_pool_data<TValue> *data, pool<TValue, TAlloc> *pool) noexcept;
-
-    unique_pool_ptr(const unique_pool_ptr &cpy) = delete;
-
-    unique_pool_ptr(unique_pool_ptr &&mv) noexcept;
-
-    ~unique_pool_ptr();
-
-    unique_pool_ptr &operator=(const unique_pool_ptr &ptr) = delete;
-
-    unique_pool_ptr &operator=(unique_pool_ptr &&mv) noexcept;
-
-    pool_ptr<TValue> release() noexcept;
-
+    /**
+     * \brief Dereference the pointer
+     */
     TValue *operator->() noexcept;
 
+    /**
+     * \brief Dereference the pointer
+     */
     TValue &operator*() noexcept;
 
+    /**
+     * Comparison operator. Compares the two ptrs (not values)
+     */
+    bool operator==(const pool_ptr &other) const noexcept;
+
+    /**
+     * Comparison operator. Compares the two ptrs (not values)
+     */
+    bool operator!=(const pool_ptr &other) const noexcept;
+
+    /**
+     * \brief bool operator - true if non-null
+     */
     operator bool() const noexcept;
 
+    /**
+     * \brief Dereference the pointer
+     */
     const TValue *operator->() const noexcept;
 
+    /**
+     * \brief Dereference the pointer
+     */
     const TValue &operator*() const noexcept;
 
-    const void *ptr() const noexcept;
+    /**
+     * \brief Do an atomic compare and exchange with another pointer
+     *
+     * \param ptr the other pointer to compare and exchange
+     * \param other the expected value of the pointer
+     * \param order the memory order to use in the cmpxchg
+     *
+     * \return whether or not the compare/exchange succeeded
+     */
+    bool compare_exchange_strong(pool_ptr &ptr, const pool_ptr &other, std::memory_order order = std::memory_order_seq_cst);
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
 class pool
 {
-    using data_type = ::cxxmetrics::internal::_pool_data<TValue>;
+    using data_type = typename pool_ptr<TValue, TAlloc>::pool_data;
     std::atomic<data_type *> v_;
+    bool active_;
     TAlloc<data_type> a_;
 
-    data_type *allocnew()
+    data_type *allocnew(const TValue &value)
     {
-        data_type *data = a_.allocate(sizeof(data_type));
-        new(&data->value) TValue();
+        data_type *data = a_.allocate(1);
+        a_.construct(data, this, data->next = reinterpret_cast<data_type *>(0x11));
 
+        new (&data->value()) TValue(value);
         return data;
     }
 
-public:
-    pool() noexcept :
-            v_(nullptr) {}
-
-    ~pool()
+    void finish(data_type *data) noexcept
     {
-        auto v = v_.load();
-        while (v)
+        data->value().~TValue();
+        if (!active_)
         {
-            auto tmp = v;
-            v = v->next;
-
-            tmp->value.~TValue();
-            a_.deallocate(tmp, sizeof(TValue));
+            a_.deallocate(data, 1);
+            return;
         }
-    }
 
-    void finish(const pool_ptr<TValue> &val) noexcept
-    {
+#ifndef CXXMETRICS_DISABLE_POOLING
         data_type *head = v_.load();
-
         while (true)
         {
-            ((data_type *)val.ptr())->next = head;
-            if (v_.compare_exchange_strong(head, (data_type *)val.ptr()))
+            if (!active_)
+            {
+                a_.deallocate(data, 1);
+                return;
+            }
+
+            data->next = head;
+            if (v_.compare_exchange_strong(head, data))
                 break;
         }
+#else
+        a_.deallocate(data, 1);
+#endif
     }
 
-    void hard_delete(const pool_ptr<TValue> &val) noexcept
+    friend class pool_ptr<TValue, TAlloc>;
+public:
+    /**
+     * \brief default constructor
+     */
+    pool() noexcept :
+            v_(nullptr),
+            active_(true)
     {
-        data_type *tmp = (data_type *)val.ptr();
-        tmp->value.~TValue();
-        a_.deallocate(tmp, sizeof(TValue));
     }
 
-    unique_pool_ptr<TValue, TAlloc> get() noexcept
+    /**
+     * \brief destructor
+     */
+    ~pool()
+    {
+        active_ = false;
+
+        while (v_)
+        {
+            auto tmp = v_.load();
+            v_ = tmp->next.load();
+
+            tmp->value().~TValue();
+            a_.deallocate(tmp, 1);
+        }
+    }
+
+    /**
+     * \brief Allocate a new object from the pool
+     */
+    pool_ptr<TValue, TAlloc> allocate(const TValue &value = TValue()) noexcept
     {
         data_type *head = v_.load();
 
         while (true)
         {
+#ifndef CXXMETRICS_DISABLE_POOLING
             if (head == nullptr)
-                return unique_pool_ptr<TValue, TAlloc>(allocnew(), this);
+#endif
+                return pool_ptr<TValue, TAlloc>(allocnew(value));
 
             data_type *next = head->next;
             if (v_.compare_exchange_strong(head, next))
-                return unique_pool_ptr<TValue, TAlloc>(head, this);
+            {
+                head->next = reinterpret_cast<data_type *>(0x11);
+                new (&head->value()) TValue(value);
+                return pool_ptr<TValue, TAlloc>(head);
+            }
         }
     }
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-unique_pool_ptr<TValue, TAlloc>::unique_pool_ptr() noexcept :
-        dat_(nullptr),
-        pool_(nullptr)
+pool_ptr<TValue, TAlloc>::pool_ptr(pool_data *data) noexcept :
+    dat_(nullptr)
 {
+    if (data && data->add_reference())
+    {
+        dat_ = data;
+        data->remove_reference();
+    }
 }
 
 template<typename TValue, template<typename ...> class TAlloc>
-unique_pool_ptr<TValue, TAlloc>::unique_pool_ptr(::cxxmetrics::internal::_pool_data<TValue> *data, pool<TValue, TAlloc> *p) noexcept :
-        dat_(data),
-        pool_(p)
+pool_ptr<TValue, TAlloc>::pool_ptr(const pool_ptr &copy) noexcept :
+    dat_(nullptr)
 {
-}
-
-template<typename TValue, template<typename ...> class TAlloc>
-unique_pool_ptr<TValue, TAlloc>::unique_pool_ptr(unique_pool_ptr &&mv) noexcept :
-        dat_(mv.dat_),
-        pool_(mv.pool_)
-{
-    mv.dat_ = nullptr;
+    auto newdat = copy.dat_.load();
+    if (newdat && newdat->add_reference())
+        dat_ = newdat;
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-unique_pool_ptr<TValue, TAlloc>::~unique_pool_ptr()
+pool_ptr<TValue, TAlloc>::pool_ptr(pool_ptr &&mv) noexcept :
+        dat_(nullptr)
 {
-    if (dat_ != nullptr)
-        pool_->finish(pool_ptr<TValue>(dat_));
+    pool_data *dat = mv.dat_.exchange(nullptr);
+    dat_ = dat;
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-unique_pool_ptr<TValue, TAlloc> &unique_pool_ptr<TValue, TAlloc>::operator=(unique_pool_ptr &&ptr) noexcept
+pool_ptr<TValue, TAlloc>::~pool_ptr()
 {
-    if (dat_ != nullptr)
-        pool_->finish(dat_);
+    auto dat = dat_.load();
+    if (dat)
+        dat->remove_reference();
+};
 
-    dat_ = ptr.release().ptr();
-    pool_ = ptr.pool_;
+template<typename TValue, template<typename ...> class TAlloc>
+pool_ptr<TValue, TAlloc> &pool_ptr<TValue, TAlloc>::operator=(const pool_ptr &cp) noexcept
+{
+    auto ndat = cp.dat_.load();
+    if (ndat && !ndat->add_reference())
+        ndat = nullptr;
+
+    auto odat = dat_.exchange(ndat);
+    if (odat)
+        odat->remove_reference();
 
     return *this;
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-pool_ptr<TValue> unique_pool_ptr<TValue, TAlloc>::release() noexcept
+pool_ptr<TValue, TAlloc> &pool_ptr<TValue, TAlloc>::operator=(pool_ptr &&ptr) noexcept
 {
-    auto ptr = dat_;
-    dat_ = nullptr;
-    return ptr;
+    auto ndat = ptr.dat_.exchange(nullptr);
+    if (ndat && !ndat->add_reference())
+        ndat = nullptr;
+
+    auto odat = dat_.exchange(ndat);
+    if (odat)
+        odat->remove_reference();
+    if (ndat)
+        ndat->remove_reference();
+
+    return *this;
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-TValue *unique_pool_ptr<TValue, TAlloc>::operator->() noexcept
+TValue *pool_ptr<TValue, TAlloc>::operator->() noexcept
 {
-    return &dat_->value;
+    return &dat_.load()->value();
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-const TValue *unique_pool_ptr<TValue, TAlloc>::operator->() const noexcept
+const TValue *pool_ptr<TValue, TAlloc>::operator->() const noexcept
 {
-    return &dat_->value;
+    return &dat_.load()->value();
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-TValue &unique_pool_ptr<TValue, TAlloc>::operator*() noexcept
+TValue &pool_ptr<TValue, TAlloc>::operator*() noexcept
 {
-    return dat_->value;
+    return dat_.load()->value();
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-unique_pool_ptr<TValue, TAlloc>::operator bool() const noexcept
+pool_ptr<TValue, TAlloc>::operator bool() const noexcept
 {
-    return dat_ != nullptr;
+    return dat_.load() != nullptr;
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-const TValue &unique_pool_ptr<TValue, TAlloc>::operator*() const noexcept
+const TValue &pool_ptr<TValue, TAlloc>::operator*() const noexcept
 {
-    return dat_->value;
+    return dat_.load()->value();
 };
 
 template<typename TValue, template<typename ...> class TAlloc>
-const void *unique_pool_ptr<TValue, TAlloc>::ptr() const noexcept
+bool pool_ptr<TValue, TAlloc>::operator==(const pool_ptr &other) const noexcept
 {
-    return dat_;
+    return dat_.load() == other.dat_.load();
+}
+
+template<typename TValue, template<typename ...> class TAlloc>
+bool pool_ptr<TValue, TAlloc>::operator!=(const pool_ptr &other) const noexcept
+{
+    return dat_.load() != other.dat_.load();
+}
+
+template<typename TValue, template<typename ...> class TAlloc>
+bool pool_ptr<TValue, TAlloc>::compare_exchange_strong(pool_ptr &ptr, const pool_ptr &other, std::memory_order order)
+{
+    auto origvalue = ptr.dat_.load();
+    auto oldvalue = origvalue;
+    auto newvalue = other.dat_.load();
+
+    if (newvalue && !newvalue->add_reference())
+        newvalue = nullptr;
+
+    if (dat_.compare_exchange_strong(oldvalue, newvalue, order))
+    {
+        if (newvalue == oldvalue)
+            return true;
+
+        if (oldvalue)
+            oldvalue->remove_reference();
+
+        return true;
+    }
+
+    // oldvalue isn't the same value it was before
+    if (oldvalue != origvalue)
+        oldvalue->add_reference();
+    if (newvalue)
+        newvalue->remove_reference();
+
+    ptr = pool_ptr(oldvalue);
+    return false;
 }
 
 }
