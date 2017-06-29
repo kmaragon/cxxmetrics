@@ -111,9 +111,9 @@ TEST(skiplist_test, insert_only_threads)
                 if (mult >= 5000)
                     return;
 
-                double insert = 0.17 * mult;
-                std::this_thread::yield();
-
+                if (mult % 2)
+                    std::this_thread::yield();
+                double insert = (0.17 * mult);
                 list.insert(insert);
             }
         });

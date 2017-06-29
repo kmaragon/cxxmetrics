@@ -188,6 +188,13 @@ public:
 
     }
 
+    static void backoff(int factor = 1)
+    {
+        // backoff more as the contention grows
+        for (int i = 0; i < factor; i++)
+            std::this_thread::yield();
+    }
+
     void set_previous(const node_ptr &hint, node_ptr &node) noexcept
     {
         auto pprev = node->previous;
@@ -197,6 +204,8 @@ public:
             auto npnext = scan_values(0, nprev, node->value);
             if (node->previous.compare_exchange_strong(pprev, nprev))
                 return;
+
+            backoff();
         }
     }
 
@@ -213,6 +222,9 @@ public:
                 {
                     if (tail_.compare_exchange_strong(tail_at_scan, nullptr))
                         return;
+
+                    backoff();
+                    continue;
                 }
             }
 
@@ -225,6 +237,8 @@ public:
             // and set it accordingly
             if (tail_.compare_exchange_strong(tail_at_scan, cur))
                 return;
+
+            backoff();
         }
     }
 
@@ -520,6 +534,7 @@ skiplist<TValue, TWidth, TLess> &skiplist<TValue, TWidth, TLess>::operator=(skip
             break;
 
         // someone stuck a head in clear and try again
+        this->backoff();
     }
 
     set_tail_if_last(ptail);
@@ -531,6 +546,8 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
 {
     int level = random_level();
 
+    int contention = 1;
+
     // case1 - the list is empty
     node_ptr head = this->head_;
     if (head == nullptr)
@@ -541,6 +558,8 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
             this->tail_.compare_exchange_strong(head, nnode);
             return;
         }
+
+        this->backoff(contention++);
     }
 
     node_ptr needslevels;
@@ -585,6 +604,7 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
             }
 
             // the head changed out from under us, we need to re-resolve the location
+            this->backoff(++contention);
             continue;
         }
 
@@ -606,7 +626,7 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
             break;
         }
 
-        head = this->head_;
+        this->backoff(++contention);
     }
 
     // Thus far, we've inserted the node at level 0. Now we have to insert it in all of the appropriate levels
@@ -627,6 +647,8 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
 
             if (saved[i]->next[i].compare_exchange_strong(pnext, needslevels))
                 break;
+
+            this->backoff();
         }
     }
 }
