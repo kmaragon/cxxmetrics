@@ -251,8 +251,6 @@ public:
         {
             auto tmp = v_.load();
             v_ = tmp->next.load();
-
-            tmp->value().~TValue();
             a_.deallocate(tmp, 1);
         }
     }
@@ -403,7 +401,10 @@ bool pool_ptr<TValue, TAlloc>::compare_exchange_strong(pool_ptr &ptr, const pool
     if (dat_.compare_exchange_strong(oldvalue, newvalue, order))
     {
         if (newvalue == oldvalue)
+        {
+            newvalue->remove_reference();
             return true;
+        }
 
         if (oldvalue)
             oldvalue->remove_reference();

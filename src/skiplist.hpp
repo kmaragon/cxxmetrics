@@ -1,6 +1,7 @@
 #ifndef CXXMETRICS_SKIPLIST_HPP_HPP
 #define CXXMETRICS_SKIPLIST_HPP_HPP
 
+#define CXXMETRICS_DISABLE_POOLING
 #include "pool.hpp"
 #include <random>
 
@@ -178,7 +179,7 @@ public:
         if (!prev || !cmp_(prev->value, node->value))
             return nullptr;
 
-        scan_values(0, prev, node);
+        scan_values(0, prev, node->value);
         return prev;
     }
 
@@ -605,8 +606,7 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
             break;
         }
 
-        // TODO: When these miss the list gets jacked
-        return;
+        head = this->head_;
     }
 
     // Thus far, we've inserted the node at level 0. Now we have to insert it in all of the appropriate levels
