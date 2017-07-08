@@ -402,7 +402,8 @@ bool pool_ptr<TValue, TAlloc>::compare_exchange_strong(pool_ptr &ptr, const pool
     {
         if (newvalue == oldvalue)
         {
-            newvalue->remove_reference();
+            if (newvalue)
+                newvalue->remove_reference();
             return true;
         }
 
@@ -413,7 +414,7 @@ bool pool_ptr<TValue, TAlloc>::compare_exchange_strong(pool_ptr &ptr, const pool
     }
 
     // oldvalue isn't the same value it was before
-    if (oldvalue != origvalue)
+    if (oldvalue && oldvalue != origvalue)
         oldvalue->add_reference();
     if (newvalue)
         newvalue->remove_reference();

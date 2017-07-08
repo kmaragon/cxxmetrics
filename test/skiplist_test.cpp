@@ -4,6 +4,8 @@
 #include <mutex>
 
 #include <execinfo.h>
+
+#define CXXMETRICS_DEBUG
 #include "skiplist.hpp"
 
 using namespace std;
@@ -18,6 +20,8 @@ TEST(skiplist_test, insert_head)
     std::vector<double> values(list.begin(), list.end());
     ASSERT_EQ(values.size(), 1);
     ASSERT_DOUBLE_EQ(values[0], 8.9988);
+
+    ASSERT_NE(list.find(8.9988), list.end());
 }
 
 TEST(skiplist_test, insert_additional)
@@ -45,6 +49,15 @@ TEST(skiplist_test, insert_additional)
     ASSERT_DOUBLE_EQ(reverse[2], 1000.4050001);
     ASSERT_DOUBLE_EQ(reverse[3], 15.6788);
     ASSERT_DOUBLE_EQ(reverse[4], 8.9988);
+
+    ASSERT_NE(list.find(8.9988), list.end());
+    ASSERT_NE(list.find(1000.4050001), list.end());
+    ASSERT_NE(list.find(8000), list.end());
+
+#ifdef CXXMETRICS_DEBUG
+    for (int i = 0; i < 8; i++)
+        list.dump_nodes(i);
+#endif
 }
 
 TEST(skiplist_test, insert_duplicate)
@@ -98,7 +111,7 @@ TEST(skiplist_test, insert_lower)
 
 TEST(skiplist_test, insert_only_threads)
 {
-    skiplist<double> list;
+    skiplist<double, 16> list;
     atomic_uint_fast64_t at(0);
     vector<thread> workers;
 
@@ -108,7 +121,7 @@ TEST(skiplist_test, insert_only_threads)
             while (true)
             {
                 auto mult = at.fetch_add(1);
-                if (mult >= 5000)
+                if (mult >= 1000)
                     return;
 
                 if (mult % 2)
@@ -123,12 +136,226 @@ TEST(skiplist_test, insert_only_threads)
         thr.join();
 
     std::vector<double> values(list.begin(), list.end());
-    ASSERT_EQ(values.size(), 5000);
-    for (int x = 0; x < 5000; x++)
+    ASSERT_EQ(values.size(), 1000);
+    for (int x = 0; x < 1000; x++)
+    {
+        // assert on every 10th result
+        if (!(x % 10))
+            ASSERT_NE(list.find(0.17 * x), list.end());
         ASSERT_DOUBLE_EQ(values[x], 0.17 * x);
+    }
 
     std::vector<double> reverse(list.rbegin(), list.rend());
-    ASSERT_EQ(reverse.size(), 5000);
-    for (int x = 1; x <= 5000; x++)
-        ASSERT_DOUBLE_EQ(reverse[5000 - x], 0.17 * (x - 1));
+    ASSERT_EQ(reverse.size(), 1000);
+    for (int x = 1; x <= 1000; x++)
+        ASSERT_DOUBLE_EQ(reverse[1000 - x], 0.17 * (x - 1));
+
+#ifdef CXXMETRICS_DEBUG
+    for (int i = 0; i < 8; i++)
+        list.dump_nodes(i);
+#endif
+}
+
+TEST(skiplist_test, erase_head_on_a_few)
+{
+    skiplist<double> list;
+
+    list.insert(8000);
+    list.insert(1000.4050001);
+    list.insert(5233.05);
+    list.insert(8.9988);
+    list.insert(15.6788);
+
+    list.erase(list.begin());
+
+#ifdef CXXMETRICS_DEBUG
+    for (int i = 0; i < 8; i++)
+        list.dump_nodes(i);
+#endif
+
+    auto begin = list.begin();
+    auto end = list.end();
+
+    std::vector<double> values(list.begin(), list.end());
+    ASSERT_EQ(values.size(), 4);
+    ASSERT_DOUBLE_EQ(values[0], 15.6788);
+    ASSERT_DOUBLE_EQ(values[1], 1000.4050001);
+    ASSERT_DOUBLE_EQ(values[2], 5233.05);
+    ASSERT_DOUBLE_EQ(values[3], 8000);
+
+    std::vector<double> reverse(list.rbegin(), list.rend());
+
+    ASSERT_EQ(reverse.size(), 4);
+    ASSERT_DOUBLE_EQ(reverse[0], 8000);
+    ASSERT_DOUBLE_EQ(reverse[1], 5233.05);
+    ASSERT_DOUBLE_EQ(reverse[2], 1000.4050001);
+    ASSERT_DOUBLE_EQ(reverse[3], 15.6788);
+}
+
+TEST(skiplist_test, erase_tail_on_a_few)
+{
+    skiplist<double> list;
+
+    list.insert(8000);
+    list.insert(1000.4050001);
+    list.insert(5233.05);
+    list.insert(8.9988);
+    list.insert(15.6788);
+
+    list.erase(list.find(8000));
+
+#ifdef CXXMETRICS_DEBUG
+    for (int i = 0; i < 8; i++)
+        list.dump_nodes(i);
+#endif
+
+    auto begin = list.begin();
+    auto end = list.end();
+
+    std::vector<double> values(list.begin(), list.end());
+    ASSERT_EQ(values.size(), 4);
+    ASSERT_DOUBLE_EQ(values[0], 8.9988);
+    ASSERT_DOUBLE_EQ(values[1], 15.6788);
+    ASSERT_DOUBLE_EQ(values[2], 1000.4050001);
+    ASSERT_DOUBLE_EQ(values[3], 5233.05);
+
+    std::vector<double> reverse(list.rbegin(), list.rend());
+    ASSERT_EQ(reverse.size(), 4);
+    ASSERT_DOUBLE_EQ(reverse[0], 5233.05);
+    ASSERT_DOUBLE_EQ(reverse[1], 1000.4050001);
+    ASSERT_DOUBLE_EQ(reverse[2], 15.6788);
+    ASSERT_DOUBLE_EQ(reverse[3], 8.9988);
+}
+
+TEST(skiplist_test, erase_mid_on_a_few)
+{
+    skiplist<double> list;
+
+    list.insert(8000);
+    list.insert(1000.4050001);
+    list.insert(5233.05);
+    list.insert(8.9988);
+    list.insert(15.6788);
+
+    list.erase(list.find(5233.05));
+
+#ifdef CXXMETRICS_DEBUG
+    for (int i = 0; i < 8; i++)
+        list.dump_nodes(i);
+#endif
+
+    auto begin = list.begin();
+    auto end = list.end();
+
+    std::vector<double> values(list.begin(), list.end());
+    ASSERT_EQ(values.size(), 4);
+    ASSERT_DOUBLE_EQ(values[0], 8.9988);
+    ASSERT_DOUBLE_EQ(values[1], 15.6788);
+    ASSERT_DOUBLE_EQ(values[2], 1000.4050001);
+    ASSERT_DOUBLE_EQ(values[3], 8000);
+
+    std::vector<double> reverse(list.rbegin(), list.rend());
+    ASSERT_EQ(reverse.size(), 4);
+    ASSERT_DOUBLE_EQ(reverse[0], 8000);
+    ASSERT_DOUBLE_EQ(reverse[1], 1000.4050001);
+    ASSERT_DOUBLE_EQ(reverse[2], 15.6788);
+    ASSERT_DOUBLE_EQ(reverse[3], 8.9988);
+}
+
+TEST(skiplist_test, invalidated_iterator_still_works)
+{
+    skiplist<double> list;
+
+    list.insert(8000);
+    list.insert(5233.05);
+    list.insert(8.9988);
+
+    auto begin = list.begin();
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 8.9988);
+
+    list.insert(15.6788);
+    ++begin;
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 15.6788);
+
+    ++begin;
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 5233.05);
+
+    list.insert(1000.4050001);
+    ++begin;
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 8000);
+
+    --begin;
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 5233.05);
+
+    --begin;
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 1000.4050001);
+
+    list.erase(list.find(15.6788));
+
+    --begin;
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 8.9988);
+
+    ++begin;
+    ASSERT_NE(begin, list.end());
+    ASSERT_EQ(*begin, 1000.4050001);
+}
+
+TEST(skiplist_test, insert_and_delete_threads)
+{
+    skiplist<double, 16> list;
+    atomic_uint_fast64_t at(0);
+    vector<thread> workers;
+
+    for (int i = 0; i < 2; i++)
+    {
+        workers.emplace_back([&]() {
+            while (true)
+            {
+                auto mult = at.fetch_add(1);
+                if (mult >= 1000)
+                    return;
+
+                if ((mult % 5) == 4)
+                    list.erase(list.find(0.17 * (mult - 4)));
+                else
+                    list.insert(0.17 * mult);
+            }
+        });
+    }
+
+    for (auto &thr : workers)
+        thr.join();
+
+    for (int i = 0; i < 1; i++)
+        list.dump_nodes(i);
+
+    std::vector<double> values(list.begin(), list.end());
+    // we should have chopped out 40% of the list. in 20% of
+    // the calls we deleted one item.
+    for (int x = 0; x < 1000; x++)
+    {
+        // we skipped every 5 entries at both 0 and 4 offsets
+        if (((x % 5) == 4) || !(x % 5))
+            continue;
+
+        // map x to an offset into our trimmed vector
+        int offset = x - (((x / 5) * 2) + 1);
+        ASSERT_DOUBLE_EQ(values[offset], 0.17 * x);
+    }
+
+    ASSERT_EQ(values.size(), 600);
+
+    /*
+    std::vector<double> reverse(list.rbegin(), list.rend());
+    ASSERT_EQ(reverse.size(), 1000);
+    for (int x = 1; x <= 1000; x++)
+        ASSERT_DOUBLE_EQ(reverse[1000 - x], 0.17 * (x - 1));
+        */
 }
