@@ -5,6 +5,7 @@
 
 #include <execinfo.h>
 
+#define CXXMETRICS_DEBUG
 #include "skiplist.hpp"
 
 using namespace std;
@@ -44,11 +45,6 @@ TEST(skiplist_test, insert_additional)
     ASSERT_NE(list.find(8.9988), list.end());
     ASSERT_NE(list.find(1000.4050001), list.end());
     ASSERT_NE(list.find(8000), list.end());
-
-#ifdef CXXMETRICS_DEBUG
-    for (int i = 0; i < 8; i++)
-        list.dump_nodes(i);
-#endif
 }
 
 TEST(skiplist_test, insert_duplicate)
@@ -121,11 +117,6 @@ TEST(skiplist_test, insert_only_threads)
             ASSERT_NE(list.find(0.17 * x), list.end());
         ASSERT_DOUBLE_EQ(values[x], 0.17 * x);
     }
-
-#ifdef CXXMETRICS_DEBUG
-    for (int i = 0; i < 8; i++)
-        list.dump_nodes(i);
-#endif
 }
 
 TEST(skiplist_test, erase_head_on_a_few)
@@ -139,11 +130,6 @@ TEST(skiplist_test, erase_head_on_a_few)
     list.insert(15.6788);
 
     list.erase(list.begin());
-
-#ifdef CXXMETRICS_DEBUG
-    for (int i = 0; i < 8; i++)
-        list.dump_nodes(i);
-#endif
 
     auto begin = list.begin();
     auto end = list.end();
@@ -168,11 +154,6 @@ TEST(skiplist_test, erase_tail_on_a_few)
 
     list.erase(list.find(8000));
 
-#ifdef CXXMETRICS_DEBUG
-    for (int i = 0; i < 8; i++)
-        list.dump_nodes(i);
-#endif
-
     auto begin = list.begin();
     auto end = list.end();
 
@@ -195,11 +176,6 @@ TEST(skiplist_test, erase_mid_on_a_few)
     list.insert(15.6788);
 
     list.erase(list.find(5233.05));
-
-#ifdef CXXMETRICS_DEBUG
-    for (int i = 0; i < 8; i++)
-        list.dump_nodes(i);
-#endif
 
     auto begin = list.begin();
     auto end = list.end();
@@ -250,7 +226,7 @@ TEST(skiplist_test, insert_and_delete_threads)
     atomic_uint_fast64_t at(0);
     vector<thread> workers;
 
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 16; i++)
     {
         workers.emplace_back([&]() {
             while (true)
@@ -289,10 +265,59 @@ TEST(skiplist_test, insert_and_delete_threads)
 
     ASSERT_EQ(values.size(), 600);
 
-    /*
-    std::vector<double> reverse(list.rbegin(), list.rend());
-    ASSERT_EQ(reverse.size(), 1000);
-    for (int x = 1; x <= 1000; x++)
-        ASSERT_DOUBLE_EQ(reverse[1000 - x], 0.17 * (x - 1));
-        */
+}
+
+TEST(skiplist_test, delete_threads_head_bias)
+{
+    skiplist<double, 16> list;
+    vector<thread> workers;
+    std::atomic_uint_fast16_t at(0);
+
+    std::atomic_uint_fast64_t count(0);
+
+    auto fn = [&list, &count, &at]() {
+        std::default_random_engine rnd(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() + at.fetch_add(47));
+        std::uniform_real_distribution<double> real(0.0, 100000);
+
+        for (int i = 0; i < 1000; i++)
+        {
+            // generate the insert value
+            double insval = real(rnd);
+
+            // clear space
+            while (count >= 1000)
+            {
+                if (list.erase(list.begin()))
+                    --count;
+            }
+
+            while (!list.insert(insval));
+            ++count;
+        }
+    };
+
+    for (int i = 0; i < 16; i++)
+        workers.emplace_back(fn);
+
+    for (auto &thr : workers)
+        thr.join();
+
+    // first just make sure my stuff is in order
+    double last = DBL_MIN;
+    auto current = list.begin();
+    for (; current != list.end(); ++current)
+    {
+        ASSERT_LT(last, *current);
+        last = *current;
+    }
+
+    // let's run once more and then size it up
+    fn();
+    std::vector<double> values(list.begin(), list.end());
+    if (values.size() != 1000)
+    {
+        for (int i = 0; i < 16; i++)
+            list.dump_nodes(i);
+    }
+    ASSERT_EQ(values.size(), 1000);
 }

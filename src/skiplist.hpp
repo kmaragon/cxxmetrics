@@ -1,7 +1,6 @@
 #ifndef CXXMETRICS_SKIPLIST_HPP_HPP
 #define CXXMETRICS_SKIPLIST_HPP_HPP
 
-#define CXXMETRICS_DISABLE_POOLING
 #include "pool.hpp"
 #include <random>
 
@@ -23,6 +22,7 @@ public:
     struct node
     {
         std::atomic<uint16_t> level;
+        std::atomic<uint16_t> valid_level;
         std::array<node_ptr, TWidth> next;
         TValue value;
 
@@ -77,6 +77,7 @@ public:
         auto ptr = node_pool.allocate();
         ptr->value = value;
         ptr->level = level;
+        ptr->valid_level = 0;
 
         return std::move(ptr);
     }
@@ -85,6 +86,7 @@ public:
     {
         auto ptr = node_pool.allocate();
         ptr->level = 0x4000;
+        ptr->valid_level = 0;
 
         return std::move(ptr);
     }
@@ -102,7 +104,7 @@ public:
     {
         node_ptr node2 = next(level, node);
         assert (node2 != node);
-        assert (!node2 || node->is_marked() || cmp_(node->value, node2->value));
+        assert (!node2 || node2->is_marked() || node->is_marked() || cmp_(node->value, node2->value));
 
         TValue pvalue = node->value;
         while (node2 && (node2->is_marked()))
@@ -223,7 +225,7 @@ public:
         {
             // what if prev is being deleted?
             // we need to rescan
-            if (prev && prev->is_marked())
+            if (!prev || prev->is_marked())
             {
                 prev_replace = head_;
                 if (prev_replace)
@@ -237,6 +239,8 @@ public:
                 }
 
                 prev = prev_replace;
+                // re-resolve prev
+                scan_values(level, prev, node->value);
             }
 
             after = node->next[level];
@@ -254,38 +258,45 @@ public:
             {
                 // special case, we have no nodes that will come before us
                 // we must have been the head.
-                if (!level && head_.compare_exchange_strong(node, after))
+                if (!level)
                 {
-                    assert(node->next[0]->next[0] == after);
-
-                    // we may have lost some next pointers by removing the head
-                    // we need to set the ones that aren't pointing to
-                    // the new node
-                    if (after)
+                    if (node->valid_level < (TWidth - 1))
                     {
-                        for (int i = TWidth - 1; i > 0; i--)
+                        // let the head finish becoming head first
+                        // ...
+                        // unless it was already relieved of head duty
+                        if (head_ != node)
+                            break;
+
+                        // we may need to re-resolve prev in this case
+                        this->backoff();
+                        continue;
+                    }
+
+                    if (head_.compare_exchange_strong(node, after))
+                    {
+                        if (after)
                         {
-                            node_ptr expected = next(i, after);
-                            while (true)
+                            for (int i = after->get_level() + 1; i < TWidth; i++)
                             {
-                                node_ptr newnext = next(i, node);
-                                if (newnext == after)
-                                    break;
+                                // these should all essentially be null
+                                // they are pointers for levels that after doesn't
+                                // know about. So after can't be in them either
+                                assert(after != node->next[i]);
+                                node_ptr ptr;
+                                after->next[i].compare_exchange_strong(ptr, next(i, node));
 
-                                // someone may have inserted something after the new head
-                                assert(after != newnext);
-                                assert(!newnext || cmp_(after->value, newnext->value));
-                                if (after->next[i].compare_exchange_strong(expected, newnext))
-                                    break;
-
-                                this->backoff(++backoff);
+                                uint16_t vlevel = after->valid_level.load();
+                                while (vlevel < i)
+                                {
+                                    if (after->valid_level.compare_exchange_strong(vlevel, i))
+                                        break;
+                                }
                             }
                         }
-                    }
-                    // else our list just became empty
 
-                    // there's nothing before our new node
-                    return nullptr;
+                        return nullptr;
+                    }
                 }
 
                 break;
@@ -422,7 +433,7 @@ public:
      *
      * \param value the value to insert into the list
      */
-    void insert(const TValue &value) noexcept;
+    bool insert(const TValue &value) noexcept;
 
     /**
      * \brief Clear out all entries in the skiplist
@@ -577,7 +588,7 @@ skiplist<TValue, TWidth, TLess> &skiplist<TValue, TWidth, TLess>::operator=(skip
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
+bool skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
 {
     int level = random_level();
 
@@ -585,14 +596,6 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
 
     // case1 - the list is empty
     node_ptr head = this->head_;
-    if (head == nullptr)
-    {
-        node_ptr nnode = this->create_node(level, value);
-        if (this->head_.compare_exchange_strong(head, nnode))
-            return;
-
-        this->backoff(contention++);
-    }
 
     node_ptr needslevels;
     std::array<node_ptr, TWidth> saved;
@@ -601,6 +604,15 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
     node_ptr nnode = this->create_node(level, value);
     while (true)
     {
+        if (!head)
+        {
+            nnode->valid_level = TWidth - 1;
+            if (this->head_.compare_exchange_strong(head, nnode))
+                return true;
+
+            nnode->valid_level = 0;
+        }
+
         // insert the value on level 0
         std::pair<node_ptr, node_ptr> insertloc = this->find_insert_loc(value, saved);
 
@@ -611,12 +623,13 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
 
             // there's nothing we need to do other than copying the value
             // no levels or any of that
-            return;
+            return false;
         }
 
         // case 3: value is the new head
         if (!insertloc.first)
         {
+            // set is the old head
             if (insertloc.second)
             {
                 int level = insertloc.second->get_level();
@@ -626,20 +639,40 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
                 for (int i = level + 1; i < TWidth; i++)
                     nnode->next[i] = insertloc.second->next[i];
             }
+            else if (head)
+            {
+                // wtf - we have a head but no next and no prev?
+                // how does this happen?
+                this->backoff();
+                continue;
+            }
+
+            nnode->next[0] = insertloc.second;
 
             // we're inserting the value as the new head. Which means it must be smaller
             if (!head->is_marked() && !this->cmp_(value, head->value))
+            {
+                this->backoff();
                 continue; // wtf is happening here?
+            }
+
+            if (head->valid_level < TWidth - 1)
+            {
+                // the head is still in prep
+                // ...
+                /// unless it's not the head anymore
+                head = this->head_;
+                this->backoff();
+                continue;
+            }
 
             if (this->head_.compare_exchange_strong(head, nnode))
             {
-                // we successfully took over the head
-                // so the node that needs its levels
-                // set is the old head
-
                 // we have a special case now. Our head has no next pointers.
                 // So we need to steal them away from the prior head
                 level = head->get_level();
+                uint16_t expectedlevel = TWidth - 1;
+                head->valid_level.compare_exchange_strong(expectedlevel, level);
 
                 // let's also start nulling out the old head's nodes
                 for (int i = level + 1; i < TWidth; i++)
@@ -650,7 +683,9 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
                     head->next[i].compare_exchange_strong(n, nullptr);
                 }
 
-                return;
+                expectedlevel = 0;
+                nnode->valid_level.compare_exchange_strong(expectedlevel, TWidth - 1);
+                return true;
             }
 
             // the head changed out from under us, we need to re-resolve the location
@@ -692,7 +727,8 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
             // only one other thread could be setting this: if the node is being deleted
             node_ptr en;
             assert(!pnext || this->cmp_(needslevels->value, pnext->value));
-            needslevels->next[i].compare_exchange_strong(en, pnext);
+            if (!needslevels->next[i].compare_exchange_strong(en, pnext))
+                break; // the node is getting deleted. Might as well just skip this
 
             // try again if our saved node is marked for deletion
             if (!saved[i] || saved[i]->is_marked() || !this->cmp_(saved[i]->value, needslevels->value))
@@ -709,7 +745,7 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
                 {
                     if (!saved[i])
                         break;
-                    this->scan_values(x, saved[i], value);
+                    this->scan_values(x, saved[i], needslevels->value);
                 }
 
                 if (!saved[i])
@@ -727,7 +763,16 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
             needslevels->next[i].compare_exchange_strong(pnext, nullptr);
             this->backoff(++contention);
         }
+
+        uint16_t vlevel = needslevels->valid_level.load();
+        while (vlevel < i)
+        {
+            if (needslevels->valid_level.compare_exchange_strong(vlevel, i))
+                break;
+        }
     }
+
+    return true;
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
@@ -761,7 +806,7 @@ bool skiplist<TValue, TWidth, TLess>::erase(const iterator &value) noexcept
     // atomically be setting the next values. Which we'll clobber now with a deletion
     // placeholder. So their atomic sets will fail and they'll re-evaluate the node
     auto placeholder = this->create_delete_placeholder(node);
-    for (int i = 0; i <= level; i++)
+    for (int i = 0; i < TWidth; i++)
     {
         node_ptr levelnext = node->next[i];
         while (true)
