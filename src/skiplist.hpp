@@ -23,7 +23,6 @@ public:
     struct node
     {
         std::atomic<uint16_t> level;
-        node_ptr previous;
         std::array<node_ptr, TWidth> next;
         TValue value;
 
@@ -57,20 +56,15 @@ public:
 
     TLess cmp_;
     node_ptr head_;
-    node_ptr tail_;
     pool<node> node_pool;
 
     _skiplist_data() {}
 
     _skiplist_data(_skiplist_data &&other)
     {
-        auto ptail = other.tail_;
         auto otherhead = other.head_.exchange(nullptr);
-        other.tail_ = nullptr;
-        other.set_tail_if_last(nullptr);
 
         head_ = std::move(otherhead);
-        set_tail_if_last(ptail);
     }
 
     ~_skiplist_data()
@@ -91,7 +85,6 @@ public:
     {
         auto ptr = node_pool.allocate();
         ptr->level = 0x4000;
-        ptr->previous = replacing->previous;
 
         return std::move(ptr);
     }
@@ -108,34 +101,51 @@ public:
     node_ptr scan_next(int level, node_ptr &node) noexcept
     {
         node_ptr node2 = next(level, node);
+        assert (node2 != node);
+        assert (!node2 || node->is_marked() || cmp_(node->value, node2->value));
 
+        TValue pvalue = node->value;
         while (node2 && (node2->is_marked()))
         {
-            node = help_delete(level, node2);
-            assert(node);
+            node = help_delete(level, node, node2);
+            if (!node)
+                return nullptr;
+
+            assert(!cmp_(pvalue, node->value));
             node2 = next(level, node);
+            assert (node2 != node);
         }
 
-        assert(!node2 || node2->value > node->value);
+        assert (!node2 || node->is_marked() || cmp_(node->value, node2->value));
         return std::move(node2);
     }
 
     node_ptr scan_values(int level, node_ptr &less, const TValue &value)
     {
-        // back up to a valid starting point
-        while (less && (less->is_delete_placeholder() || less->is_marked()))
-            less = less->previous;
-
-        if (!less)
+        node_ptr more;
+        if (!less || !cmp_(less->value, value))
+        {
             less = front();
+            if (!less)
+                return nullptr;
+        }
 
-        auto more = scan_next(level, less);
+        if (!cmp_(less->value, value))
+        {
+            more = less;
+            less = nullptr;
+            return more;
+        }
+
+        more = scan_next(level, less);
         while (more && cmp_(more->value, value))
         {
             less = more;
             more = scan_next(level, less);
         }
 
+        assert(!less || cmp_(less->value, value));
+        assert(!more || !cmp_(more->value, value));
         return std::move(more);
     }
 
@@ -154,9 +164,6 @@ public:
 
     std::pair<node_ptr, node_ptr> find_insert_loc(const TValue &value, std::array<node_ptr, TWidth> &saved)
     {
-        if (!cmp_(head_->value, value))
-            return {nullptr, head_}; // we are below head
-
         node_ptr less = head_;
         node_ptr more = nullptr;
 
@@ -164,25 +171,21 @@ public:
         {
             more = scan_values(i, less, value);
             saved[i] = less;
+            assert(!less || cmp_(less->value, value));
+            assert(!more || !cmp_(more->value, value));
         }
 
-        assert(!more || less->value < more->value);
         return std::make_pair(std::move(less), std::move(more));
     }
 
     node_ptr find_loc(const TValue &value)
     {
         node_ptr more = nullptr;
-        if (!cmp_(head_->value, value))
-            more = front();
-        else
-        {
-            node_ptr less = head_;
-            for (int i = TWidth - 1; i >= 0; i--)
-                more = scan_values(i, less, value);
-            assert(!more || less->value < more->value);
-        }
+        node_ptr less = head_;
+        for (int i = TWidth - 1; i >= 0; i--)
+            more = scan_values(i, less, value);
 
+        assert(!more || !less || less->value < more->value);
         if (more && more->value == value)
             return std::move(more);
         return nullptr;
@@ -191,99 +194,51 @@ public:
     void clear_all() noexcept
     {
         auto cur = head_.exchange(nullptr);
-        while (cur)
-        {
-            // allow 'gc' to happen on our nodes
-            cur->previous = nullptr;
-            cur = cur->next[0];
-        }
-
-        set_tail_if_last();
     }
 
     node_ptr front() noexcept
     {
         node_ptr f = head_;
-        while (f && (f->is_delete_placeholder() || f->is_marked()))
-            f = scan_next(0, f);
+        while (f && f->is_marked())
+            f = next(0, f);
 
         return f;
     }
 
-    node_ptr back() noexcept
-    {
-        auto cur = tail_;
-        while (cur && (cur->is_delete_placeholder() || cur->is_marked()))
-            cur = previous(0, cur);
-
-        if (!cur)
-            return nullptr;
-
-        while (true)
-        {
-            auto nxt = scan_next(0, cur);
-            while (nxt && (nxt->is_delete_placeholder() || nxt->is_marked()))
-                nxt = scan_next(0, nxt);
-
-            if (!nxt)
-                return std::move(cur);
-
-            cur = nxt;
-        }
-
-        return nullptr;
-    }
-
-    node_ptr previous(int level, const node_ptr &node) noexcept
-    {
-        auto prev = node->previous;
-        while (prev && ((prev->get_level() < level) || prev->is_marked() || prev->is_delete_placeholder()))
-            prev = prev->previous;
-
-        return prev;
-    }
-
-    node_ptr scan_previous(int level, const node_ptr &node) noexcept
-    {
-        auto prev = previous(level, node);
-        if (!prev)
-            prev = front();
-
-        if (!prev || !cmp_(prev->value, node->value))
-            return nullptr;
-
-        for (int i = TWidth - 1; i >= level; i--)
-        {
-            auto n = next(level, prev);
-            while (n && (n->is_marked() || n->get_level() < level))
-                n = next(level, n);
-
-            while (n && cmp_(n->value, node->value))
-            {
-                prev = n;
-                n = next(level, n);
-                while (n && (n->is_marked() || n->get_level() < level))
-                    n = next(level, n);
-            }
-        }
-
-        return prev;
-    }
-
-    node_ptr help_delete(int level, const node_ptr &delnode) noexcept
+    node_ptr help_delete(int level, const node_ptr &previous, const node_ptr &delnode) noexcept
     {
         // the key element here is that we can't mutate node's next and previous pointers
         // in a way that makes them invalid. We want the node to stay valid as long as. The
         // node will be inaccessible from either side once it's all done. And when others stop
         // using it, it'll lose all of it's references
-        node_ptr prev;
         node_ptr after;
+        node_ptr prev_replace = previous;
+        node_ptr prev = previous;
         node_ptr node = delnode;
 
         int backoff = 1;
+        node_ptr expected = node;
+
         while (true)
         {
-            prev = scan_previous(level, node);
+            // what if prev is being deleted?
+            // we need to rescan
+            if (prev && prev->is_marked())
+            {
+                prev_replace = head_;
+                if (prev_replace)
+                {
+                    for (int i = TWidth - 1; i >= level; i--)
+                    {
+                        scan_values(i, prev_replace, prev_replace->value);
+                        if (!prev_replace)
+                            break;
+                    }
+                }
+
+                prev = prev_replace;
+            }
+
             after = node->next[level];
             if (!after || !after->is_delete_placeholder())
             {
@@ -291,7 +246,9 @@ public:
                 continue;
             }
 
-            after = after->next[level];
+            after = next(level, node);
+            while (after && after->is_marked())
+                after = next(level, after);
 
             if (!prev)
             {
@@ -299,55 +256,71 @@ public:
                 // we must have been the head.
                 if (!level && head_.compare_exchange_strong(node, after))
                 {
-                    // we may have lost some next pointers
+                    assert(node->next[0]->next[0] == after);
+
+                    // we may have lost some next pointers by removing the head
                     // we need to set the ones that aren't pointing to
                     // the new node
-                    for (int i = TWidth - 1; i > 0; i--)
+                    if (after)
                     {
-                        node_ptr expected = next(i, after);
-                        while (true)
+                        for (int i = TWidth - 1; i > 0; i--)
                         {
-                            node_ptr actual = next(i, node);
-                            if (actual == after)
-                                break;
+                            node_ptr expected = next(i, after);
+                            while (true)
+                            {
+                                node_ptr newnext = next(i, node);
+                                if (newnext == after)
+                                    break;
 
-                            // someone may have inserted something after the new head
-                            if (after->next[i].compare_exchange_strong(expected, actual))
-                                break;
+                                // someone may have inserted something after the new head
+                                assert(after != newnext);
+                                assert(!newnext || cmp_(after->value, newnext->value));
+                                if (after->next[i].compare_exchange_strong(expected, newnext))
+                                    break;
 
-                            this->backoff(++backoff);
-                            continue;
+                                this->backoff(++backoff);
+                            }
                         }
                     }
-                    return std::move(after);
+                    // else our list just became empty
+
+                    // there's nothing before our new node
+                    return nullptr;
                 }
 
                 break;
             }
 
-            if (prev->is_marked())
-                continue; // our previous value got marked
+            if (after && after->is_marked())
+                continue;
 
-            node_ptr expected = node;
-            if ((prev->next[level].compare_exchange_strong(expected, after)))
-                break;
-
-            if (expected && cmp_(node->value, expected->value))
+            assert(prev != after);
+            assert(!after || cmp_(prev->value, after->value));
+            if (prev->next[level].compare_exchange_strong(expected, after))
             {
-                after = expected;
-                break; // our previous' next has already been set appropriately
+                // the only authorative check for after being marked for deletion
+                if (after && after->is_marked())
+                {
+                    expected = after;
+                    continue;
+                }
+
+                break;
             }
 
+            if (expected == after)
+                break; // our previous' next has already been set appropriately
+
+            if (expected && cmp_(expected->value, node->value))
+                prev = expected;
+            else
+                break;
+
+            expected = node;
             this->backoff(++backoff);
         }
 
-        if (after && (after != prev))
-            this->set_previous(prev, after);
-
-        if (!level)
-            this->set_tail_if_last();
-
-        return std::move(prev);
+        return std::move(prev_replace);
     }
 
     static void backoff(int factor = 1)
@@ -355,52 +328,6 @@ public:
         // backoff more as the contention grows
         for (int i = 0; i < factor; i++)
             std::this_thread::yield();
-    }
-
-    void set_previous(const node_ptr &hint, node_ptr &node) noexcept
-    {
-        auto pprev = node->previous;
-        auto nprev = hint;
-
-        while (nprev && ((nprev->get_level() < node->get_level()) || nprev->is_marked()))
-            nprev = previous(node->get_level(), nprev);
-
-        assert(!nprev || nprev->get_level() >= node->get_level());
-
-        while (true)
-        {
-            if ((!nprev || (scan_values(node->get_level(), nprev, node->value) == node)) &&
-                (node->previous.compare_exchange_strong(pprev, nprev)))
-                return;
-
-            backoff();
-        }
-    }
-
-    void set_tail_if_last() noexcept
-    {
-        auto tail_at_scan = tail_;
-        auto tail = tail_at_scan;
-
-        while (true)
-        {
-            while (tail && (tail->is_marked() || tail->is_delete_placeholder()))
-                tail = scan_previous(0, tail);
-            tail = scan_last(0, tail);
-
-            // set the tail to our new tail if it hasn't changed
-            if (tail != tail_at_scan)
-            {
-                if (tail_.compare_exchange_strong(tail_at_scan, tail))
-                    break;
-
-                tail = tail_at_scan;
-            }
-            else
-                break;
-
-            this->backoff();
-        }
     }
 
 };
@@ -429,12 +356,10 @@ class skiplist : protected ::cxxmetrics::internal::_skiplist_data<TValue, TWidth
 
     static std::default_random_engine rnd_;
 public:
-    template<bool TFwd>
-    class iterator : public std::iterator<std::bidirectional_iterator_tag, TValue>
+    class iterator : public std::iterator<std::input_iterator_tag, TValue>
     {
         skiplist *list_;
         node_ptr node_;
-        bool end_;
 
         iterator(skiplist *list, const node_ptr &node) noexcept;
 
@@ -446,7 +371,6 @@ public:
         iterator &operator=(const iterator &other) noexcept = default;
 
         iterator &operator++() noexcept;
-        iterator &operator--() noexcept;
 
         bool operator==(const iterator &other) const noexcept;
         bool operator!=(const iterator &other) const noexcept;
@@ -454,9 +378,6 @@ public:
         const TValue *operator->() const noexcept;
         const TValue &operator*() const noexcept;
     };
-
-    using forward_iterator = iterator<true>;
-    using reverse_iterator = iterator<false>;
 
     /**
      * \brief Default constructor
@@ -517,7 +438,7 @@ public:
      *
      * \return An iterator to the list location where the value that's being deleted is
      */
-    forward_iterator find(const TValue &value) noexcept;
+    iterator find(const TValue &value) noexcept;
 
     /**
      * \brief Erase an element from the skiplist
@@ -526,134 +447,68 @@ public:
      *
      * @return Whether or not the value was erased by this call
      */
-    template<bool TFwd>
-    bool erase(const iterator<TFwd> &value) noexcept;
+    bool erase(const iterator &value) noexcept;
 
     /**
-     * \brief Get a forward iterator into the skiplist
+     * \brief Get an iterator into the skiplist
      *
-     * \return a forward iterator into the skiplist
+     * \return an iterator into the skiplist
      */
-    forward_iterator begin() noexcept;
+    iterator begin() noexcept;
 
     /**
-     * \brief Get a reverse iterator into the skiplist
-     *
-     * \return a reverse iterator into the skiplist
-     */
-    reverse_iterator rbegin() noexcept;
-
-    /**
-     * \brief Get the end of the list for a forward iterator
+     * \brief Get the end of the list for an iterator
      *
      * \return the end of the list
      */
-    forward_iterator end() noexcept;
-
-    /**
-     * \brief Get the end of the list for a reverse iterator
-     *
-     * \return the end of the list
-     */
-    reverse_iterator rend() noexcept;
+    iterator end() noexcept;
 
 #ifdef CXXMETRICS_DEBUG
     void dump_nodes(int level) ;
 #endif
 
 protected:
-    friend class iterator<true>;
-    friend class iterator<false>;
+    friend class iterator;
 };
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-skiplist<TValue, TWidth, TLess>::iterator<TFwd>::iterator(skiplist *list, const node_ptr &node) noexcept :
+skiplist<TValue, TWidth, TLess>::iterator::iterator(skiplist *list, const node_ptr &node) noexcept :
         list_(list),
-        node_(node),
-        end_(node)
+        node_(node)
 { }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-skiplist<TValue, TWidth, TLess>::iterator<TFwd>::iterator() noexcept :
+skiplist<TValue, TWidth, TLess>::iterator::iterator() noexcept :
         list_(nullptr),
-        node_(nullptr),
-        end_(true)
+        node_(nullptr)
 { }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-skiplist<TValue, TWidth, TLess>::iterator<TFwd> &skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator++() noexcept
+typename skiplist<TValue, TWidth, TLess>::iterator &skiplist<TValue, TWidth, TLess>::iterator::operator++() noexcept
 {
     if (!node_)
-    {
-        if (!list_ || end_)
-            return *this;
-
-        if (TFwd)
-            node_ = list_->front();
-        else
-            node_ = list_->back();
         return *this;
-    }
 
     auto node = node_;
-    if (TFwd)
-        node_ = node ? list_->scan_next(0, node) : nullptr;
-    else
-        node_ = node ? list_->scan_previous(0, node) : nullptr;
-
-    if (!node_)
-        end_ = true;
+    node_ = node ? list_->scan_next(0, node) : nullptr;
 
     return *this;
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-skiplist<TValue, TWidth, TLess>::iterator<TFwd> &skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator--() noexcept
-{
-    if (!node_)
-    {
-        if (!list_ || !end_)
-            return *this;
-
-        if (TFwd)
-            node_ = list_->back();
-        else
-            node_ = list_->front();
-
-        end_ = node_;
-        return *this;
-    }
-
-    auto node = node_;
-    if (TFwd)
-        node_ = node ? list_->scan_previous(0, node) : nullptr;
-    else
-        node_ = node ? list_->scan_next(0, node) : nullptr;
-
-    return *this;
-}
-
-template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-bool skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator==(const iterator &other) const noexcept
+bool skiplist<TValue, TWidth, TLess>::iterator::operator==(const iterator &other) const noexcept
 {
     return node_ == other.node_;
 };
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-bool skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator!=(const iterator &other) const noexcept
+bool skiplist<TValue, TWidth, TLess>::iterator::operator!=(const iterator &other) const noexcept
 {
     return node_ != other.node_;
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-const TValue *skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator->() const noexcept
+const TValue *skiplist<TValue, TWidth, TLess>::iterator::operator->() const noexcept
 {
     if (!node_)
         return nullptr;
@@ -661,8 +516,7 @@ const TValue *skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator->() cons
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-const TValue &skiplist<TValue, TWidth, TLess>::iterator<TFwd>::operator*() const noexcept
+const TValue &skiplist<TValue, TWidth, TLess>::iterator::operator*() const noexcept
 {
     return node_->value;
 }
@@ -706,10 +560,7 @@ skiplist<TValue, TWidth, TLess> &skiplist<TValue, TWidth, TLess>::operator=(cons
 template<typename TValue, uint16_t TWidth, typename TLess>
 skiplist<TValue, TWidth, TLess> &skiplist<TValue, TWidth, TLess>::operator=(skiplist &&other) noexcept
 {
-    auto ptail = other.tail_;
     auto otherhead = other.head_.exchange(nullptr);
-    other.tail_ = nullptr;
-    other.set_tail_if_last(nullptr);
 
     while (true)
     {
@@ -722,7 +573,6 @@ skiplist<TValue, TWidth, TLess> &skiplist<TValue, TWidth, TLess>::operator=(skip
         this->backoff();
     }
 
-    set_tail_if_last(ptail);
     return *this;
 }
 
@@ -739,10 +589,7 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
     {
         node_ptr nnode = this->create_node(level, value);
         if (this->head_.compare_exchange_strong(head, nnode))
-        {
-            this->tail_.compare_exchange_strong(head, nnode);
             return;
-        }
 
         this->backoff(contention++);
     }
@@ -780,7 +627,10 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
                     nnode->next[i] = insertloc.second->next[i];
             }
 
-            nnode->previous = nullptr;
+            // we're inserting the value as the new head. Which means it must be smaller
+            if (!head->is_marked() && !this->cmp_(value, head->value))
+                continue; // wtf is happening here?
+
             if (this->head_.compare_exchange_strong(head, nnode))
             {
                 // we successfully took over the head
@@ -800,14 +650,6 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
                     head->next[i].compare_exchange_strong(n, nullptr);
                 }
 
-                // set our previous values
-                for (int i = 0; i < level; i++)
-                {
-                    node_ptr newnext = head->next[i];
-
-                    if (newnext && (newnext->get_level() <= i))
-                        this->set_previous(head, newnext);
-                }
                 return;
             }
 
@@ -816,15 +658,14 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
             continue;
         }
 
-        assert(!insertloc.second || (!insertloc.second->is_marked() && !insertloc.second->is_delete_placeholder()));
+        assert(!insertloc.second || !insertloc.second->is_delete_placeholder());
 
         // case 4: inserting the value after an existing value
         // get the latest values
         nnode->next[0] = insertloc.second;
-        nnode->previous = insertloc.first;
-        if (nnode->previous->get_level() < level)
-            nnode->previous = this->previous(level, nnode->previous);
 
+        assert(insertloc.first != nnode);
+        assert(this->cmp_(insertloc.first->value, value));
         if (insertloc.first->next[0].compare_exchange_strong(insertloc.second, nnode))
         {
             // we successfully inserted it in between first and second.
@@ -843,52 +684,60 @@ void skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
         while (true)
         {
             // make sure our saved is the up to date prev
-            node_ptr pnext = this->scan_values(i, saved[i], value);
-
-            // only one other thread could be setting this: if the node is being deleted
-            node_ptr en;
-            needslevels->next[i].compare_exchange_strong(en, pnext);
-
-            // try again if our saved node is marked for deletion
-            if (saved[i]->is_marked())
-                continue;
+            node_ptr pnext = this->scan_values(i, saved[i], needslevels->value);
 
             if (pnext == needslevels)
                 break; // someone beat us to it
 
+            // only one other thread could be setting this: if the node is being deleted
+            node_ptr en;
+            assert(!pnext || this->cmp_(needslevels->value, pnext->value));
+            needslevels->next[i].compare_exchange_strong(en, pnext);
+
+            // try again if our saved node is marked for deletion
+            if (!saved[i] || saved[i]->is_marked() || !this->cmp_(saved[i]->value, needslevels->value))
+            {
+                // unfortunately our previous is before the one we had tracked
+                // so we'll need to re-scan at this level
+                saved[i] = this->head_;
+
+                // rare case, the list became empty while we were inserting
+                if (!saved[i])
+                    break;
+
+                for (int x = TWidth - 1; x >= i; x--)
+                {
+                    if (!saved[i])
+                        break;
+                    this->scan_values(x, saved[i], value);
+                }
+
+                if (!saved[i])
+                    break;
+
+                this->backoff(++contention);
+                continue;
+            }
+
+            assert(needslevels != saved[i]);
+            assert(this->cmp_(saved[i]->value, needslevels->value));
             if (saved[i]->next[i].compare_exchange_strong(pnext, needslevels))
                 break;
 
             needslevels->next[i].compare_exchange_strong(pnext, nullptr);
-            this->backoff();
+            this->backoff(++contention);
         }
     }
-
-    // until we were locked in, the previous may not have been updated
-    // as nodes were inserted.
-    this->set_previous(this->scan_previous(level, needslevels), needslevels);
-
-    // atomically resolve the previous
-    for (int i = 0; i < level; i++)
-    {
-        node_ptr newnext = needslevels->next[i];
-        if (newnext && (newnext->get_level() <= i))
-            this->set_previous(needslevels, newnext);
-    }
-
-    // and atomically set the tail if necessary
-    this->set_tail_if_last();
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-typename skiplist<TValue, TWidth, TLess>::forward_iterator skiplist<TValue, TWidth, TLess>::find(const TValue &value) noexcept
+typename skiplist<TValue, TWidth, TLess>::iterator skiplist<TValue, TWidth, TLess>::find(const TValue &value) noexcept
 {
-    return forward_iterator(this, this->find_loc(value));
+    return iterator(this, this->find_loc(value));
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-template<bool TFwd>
-bool skiplist<TValue, TWidth, TLess>::erase(const iterator<TFwd> &value) noexcept
+bool skiplist<TValue, TWidth, TLess>::erase(const iterator &value) noexcept
 {
     node_ptr node = value.node_;
     if (value.list_ != this || !node)
@@ -928,10 +777,22 @@ bool skiplist<TValue, TWidth, TLess>::erase(const iterator<TFwd> &value) noexcep
         }
     }
 
-    // and last - we'll just run the delete helper to make sure the node is removed
-    // at all levels. It might have already been done
-    for (int i = level; i >= 0; i--)
-        this->help_delete(i, node);
+    node_ptr prev = this->head_;
+    if (prev == node)
+        prev = nullptr;
+
+    for (int i = TWidth - 1; i >= 0; i--)
+    {
+        // resolve the previous for the level
+        if (prev)
+            this->scan_values(i, prev, node->value);
+
+        // delete the node
+        if (i <= node->get_level())
+            this->help_delete(i, prev, node);
+    }
+
+    return true;
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
@@ -941,27 +802,15 @@ void skiplist<TValue, TWidth, TLess>::clear() noexcept
 };
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-typename skiplist<TValue, TWidth, TLess>::forward_iterator skiplist<TValue, TWidth, TLess>::begin() noexcept
+typename skiplist<TValue, TWidth, TLess>::iterator skiplist<TValue, TWidth, TLess>::begin() noexcept
 {
-    return forward_iterator(this, this->front());
+    return iterator(this, this->front());
 }
 
 template<typename TValue, uint16_t TWidth, typename TLess>
-typename skiplist<TValue, TWidth, TLess>::reverse_iterator skiplist<TValue, TWidth, TLess>::rbegin() noexcept
+typename skiplist<TValue, TWidth, TLess>::iterator skiplist<TValue, TWidth, TLess>::end() noexcept
 {
-    return reverse_iterator(this, this->back());
-}
-
-template<typename TValue, uint16_t TWidth, typename TLess>
-typename skiplist<TValue, TWidth, TLess>::forward_iterator skiplist<TValue, TWidth, TLess>::end() noexcept
-{
-    return forward_iterator(this, nullptr);
-}
-
-template<typename TValue, uint16_t TWidth, typename TLess>
-typename skiplist<TValue, TWidth, TLess>::reverse_iterator skiplist<TValue, TWidth, TLess>::rend() noexcept
-{
-    return reverse_iterator(this, nullptr);
+    return iterator(this, nullptr);
 }
 
 #ifdef CXXMETRICS_DEBUG
@@ -978,10 +827,6 @@ void skiplist<TValue, TWidth, TLess>::dump_nodes(int level)
     assert(!cur->is_delete_placeholder());
 
     std::cout << "Level " << level << " -- ";
-    if (cur->previous)
-    {
-        std::cout << "(prev: " << cur->previous->value << ") ";
-    }
 
     std::cout << cur->value;
     if (cur->is_marked())
@@ -998,13 +843,7 @@ void skiplist<TValue, TWidth, TLess>::dump_nodes(int level)
             continue;
         }
 
-        std::cout << " -> ";
-        if (cur->previous)
-        {
-            if (cur->previous->next[cur->get_level()] != cur)
-                std::cout << "(different prev: " << cur->previous->value << ") ";
-        }
-        std::cout << "[L" << cur->get_level() << "] " << cur->value;
+        std::cout << " -> [L" << cur->get_level() << "] " << cur->value;
         if (cur->is_marked())
             std::cout << "(tagged_deleted)";
 
