@@ -113,7 +113,9 @@ public:
             if (!node)
                 return nullptr;
 
-            assert(!cmp_(pvalue, node->value));
+            // make sure that the value isn't bigger than the original previous
+            // unless it is not less than head
+            assert(!cmp_(pvalue, node->value) || !head_ || !cmp_(node->value, head_->value));
             node2 = next(level, node);
             assert (node2 != node);
         }
@@ -263,10 +265,12 @@ public:
                     if (node->valid_level < (TWidth - 1))
                     {
                         // let the head finish becoming head first
-                        // ...
-                        // unless it was already relieved of head duty
-                        if (head_ != node)
-                            break;
+                        if (node->valid_level >= node->get_level())
+                        {
+                            // unless it was already relieved of head duty
+                            if (head_ != node)
+                                break;
+                        }
 
                         // we may need to re-resolve prev in this case
                         this->backoff();
@@ -747,9 +751,6 @@ bool skiplist<TValue, TWidth, TLess>::insert(const TValue &value) noexcept
                         break;
                     this->scan_values(x, saved[i], needslevels->value);
                 }
-
-                if (!saved[i])
-                    break;
 
                 this->backoff(++contention);
                 continue;

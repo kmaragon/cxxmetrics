@@ -82,7 +82,7 @@ TEST(skiplist_test, insert_lower)
     ASSERT_DOUBLE_EQ(values[4], 8000);
 }
 
-TEST(skiplist_test, insert_only_threads)
+TEST(skiplist_test, insert_threads_tail)
 {
     skiplist<double, 16> list;
     atomic_uint_fast64_t at(0);
@@ -94,6 +94,43 @@ TEST(skiplist_test, insert_only_threads)
             while (true)
             {
                 auto mult = at.fetch_add(1);
+                if (mult >= 1000)
+                    return;
+
+                if (mult % 2)
+                    std::this_thread::yield();
+                double insert = (0.17 * mult);
+                list.insert(insert);
+            }
+        });
+    }
+
+    for (auto &thr : workers)
+        thr.join();
+
+    std::vector<double> values(list.begin(), list.end());
+    ASSERT_EQ(values.size(), 1000);
+    for (int x = 0; x < 1000; x++)
+    {
+        // assert on every 10th result
+        if (!(x % 10))
+            ASSERT_NE(list.find(0.17 * x), list.end());
+        ASSERT_DOUBLE_EQ(values[x], 0.17 * x);
+    }
+}
+
+TEST(skiplist_test, insert_threads_head)
+{
+    skiplist<double, 16> list;
+    atomic_uint_fast64_t at(999);
+    vector<thread> workers;
+
+    for (int i = 0; i < 16; i++)
+    {
+        workers.emplace_back([&]() {
+            while (true)
+            {
+                auto mult = at.fetch_add(-1);
                 if (mult >= 1000)
                     return;
 
@@ -220,7 +257,7 @@ TEST(skiplist_test, invalidated_iterator_still_works)
     ASSERT_EQ(*begin, 10000.4050001);
 }
 
-TEST(skiplist_test, insert_and_delete_threads)
+TEST(skiplist_test, erase_threads_interspersed)
 {
     skiplist<double, 16> list;
     atomic_uint_fast64_t at(0);
@@ -267,7 +304,65 @@ TEST(skiplist_test, insert_and_delete_threads)
 
 }
 
-TEST(skiplist_test, delete_threads_head_bias)
+TEST(skiplist_test, erase_threads_tail)
+{
+    skiplist<double, 16> list;
+    vector<thread> workers;
+    std::atomic_uint_fast16_t at(0);
+
+    std::atomic_uint_fast64_t count(0);
+
+    auto fn = [&list, &count, &at]() {
+        std::default_random_engine rnd(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count() + at.fetch_add(47));
+        std::uniform_real_distribution<double> real(0.0, 100000);
+
+        for (int i = 0; i < 100; i++)
+        {
+            // generate the insert value
+            double insval = real(rnd);
+
+            // clear space
+            while (count >= 100)
+            {
+                auto eraseit = list.begin();
+                auto curit = eraseit;
+                for (; curit != list.end(); ++curit)
+                {
+                    eraseit = curit;
+                    ++curit;
+                }
+
+                if (list.erase(eraseit))
+                    --count;
+            }
+
+            while (!list.insert(insval));
+            ++count;
+        }
+    };
+
+    for (int i = 0; i < 16; i++)
+        workers.emplace_back(fn);
+
+    for (auto &thr : workers)
+        thr.join();
+
+    // first just make sure my stuff is in order
+    double last = DBL_MIN;
+    auto current = list.begin();
+    for (; current != list.end(); ++current)
+    {
+        ASSERT_LT(last, *current);
+        last = *current;
+    }
+
+    // let's run once more and then size it up
+    fn();
+    std::vector<double> values(list.begin(), list.end());
+    ASSERT_EQ(values.size(), 100);
+}
+
+TEST(skiplist_test, erase_threads_head)
 {
     skiplist<double, 16> list;
     vector<thread> workers;
