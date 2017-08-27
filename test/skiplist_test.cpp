@@ -5,25 +5,76 @@
 
 #include <execinfo.h>
 
-#define CXXMETRICS_DEBUG
-#include "skiplist.hpp"
+#include "pqskiplist.hpp"
 
 using namespace std;
+using namespace cxxmetrics;
 using namespace cxxmetrics::internal;
+using namespace string_literals;
+
+TEST(skiplist_node_test, next_valid_and_delete)
+{
+    skiplist_node<string, 8> node;
+    skiplist_node<string, 8> after;
+    skiplist_node<string, 8> last;
+
+    node.init("Hello 1"s, 0);
+    after.init("Removing"s, 0);
+    last.init("Second"s, 0);
+
+    node.insert_next(0, nullptr, &after);
+    after.insert_next(0, nullptr, &last);
+
+    node.mark_next_deleted(0, &after);
+    ASSERT_EQ(node.next_valid(0)->value(), "Second"s);
+
+    ASSERT_FALSE(node.next(0).second);
+    ASSERT_TRUE(node.complete_next_delete(0));
+
+    auto nextnow = node.next(0);
+    ASSERT_EQ(nextnow.first->value(), "Second"s);
+    ASSERT_TRUE(nextnow.second);
+}
+
+TEST(skiplist_node_test, remove_node)
+{
+    skiplist_node<string, 8> node;
+    skiplist_node<string, 8> after;
+    skiplist_node<string, 8> last;
+
+    node.init("Hello 1"s, 0);
+    after.init("Removing"s, 0);
+    last.init("Second"s, 0);
+
+    node.insert_next(0, nullptr, &after);
+    after.insert_next(0, nullptr, &last);
+
+    ASSERT_TRUE(node.remove_node(0, &after));
+
+    auto nextnow = node.next_valid(0);
+    ASSERT_EQ(nextnow->value(), "Second"s);
+}
 
 TEST(skiplist_test, insert_head)
 {
-    skiplist<double> list;
+    skiplist_reservoir<double, 128> list;
 
-    list.insert(8.9988);
+    ASSERT_TRUE(list.insert(8.9988));
+    ASSERT_TRUE(list.insert(3));
+    ASSERT_TRUE(list.insert(45));
+    ASSERT_TRUE(list.insert(98));
+    ASSERT_TRUE(list.insert(23));
+    ASSERT_FALSE(list.insert(45));
 
-    std::vector<double> values(list.begin(), list.end());
-    ASSERT_EQ(values.size(), 1);
-    ASSERT_DOUBLE_EQ(values[0], 8.9988);
+    //std::vector<double> values(list.begin(), list.end());
+    //ASSERT_EQ(values.size(), 1);
+    //ASSERT_DOUBLE_EQ(values[0], 8.9988);
 
-    ASSERT_NE(list.find(8.9988), list.end());
+    //ASSERT_NE(list.find(8.9988), list.end());
 }
 
+
+/*
 TEST(skiplist_test, insert_additional)
 {
     skiplist<double> list;
@@ -416,3 +467,5 @@ TEST(skiplist_test, erase_threads_head)
     }
     ASSERT_EQ(values.size(), 1000);
 }
+
+ */
