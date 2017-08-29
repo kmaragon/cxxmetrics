@@ -119,25 +119,6 @@ public:
         return next_[level].compare_exchange_strong(if_matches, marked_ptr(if_matches));
     }
 
-    bool complete_next_delete(int level) noexcept
-    {
-        auto nextptr = next_[level].load();
-        if (!ptr_is_marked(nextptr))
-            return false;
-
-        auto next = unmarked_ptr(nextptr);
-        auto newnext = next->next_valid(level);
-
-        return next_[level].compare_exchange_strong(nextptr, newnext);
-    }
-
-    bool remove_node(int level, skiplist_node *node) noexcept
-    {
-        if (mark_next_deleted(level, node))
-            return complete_next_delete(level);
-        return false;
-    }
-
 };
 
 }
@@ -157,9 +138,11 @@ private:
     static std::default_random_engine random_;
 
     std::pair<node *, node *> find_location(node *before, int level, const T &value) const noexcept;
+    std::pair<node *, node *> find_location(int level, const T &value) const noexcept;
+    std::pair<node *, node *> find_location(node *before, int level, const T &value) noexcept;
+    void find_location(int level, const T &value, std::array<std::pair<node *, node *>, width> &into) noexcept;
     void takeover_head(node *newhead, node *oldhead) noexcept;
     void finish_insert(int level, node *insertnode, std::array<std::pair<node *, node *>, width> &locations) noexcept;
-    void find_location(int level, const T &value, std::array<std::pair<node *, node *>, width> &into) const noexcept;
     void remove_node_from_level(int level, node *prev_hint, node *remnode) noexcept;
     node *make_node(const T &value, int level);
 public:
@@ -275,7 +258,7 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
         //    we'll just return a proper false value
         //    we establish that by seeing if the value is not less than the "after"
         //    which we already established as not being less than the value
-        if (locations[0].second && !cmp_(value, locations[0].second->value()))
+        if (locations[0].second && !cmp_(value, locations[0].second->value()) && !locations[0].second->is_marked())
             return false;
 
         // 3. There is in fact, already a head. But the value we're inserting
@@ -331,23 +314,40 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
 
 template<typename T, int TSize, typename TLess>
 std::pair<typename skiplist_reservoir<T, TSize, TLess>::node *, typename skiplist_reservoir<T, TSize, TLess>::node *>
-skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, const T &value) const noexcept
+skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, const T &value) noexcept
 {
-    node *after = before ? before->next_valid(level) : head_.load();
-    while (after && cmp_(after->value(), value))
+    auto head_pair = [this]() {
+        auto head = head_.load();
+        return std::make_pair(head, !head->is_marked());
+    };
+    auto after = before ? before->next(level) : head_pair();
+    while (after.first)
     {
-        before = after;
-        after = after->next_valid(level);
+        // if our next node is marked for deletion
+        // or if it doesn't belong on this level (probably because
+        // it used to be head and got moved here)
+        if (!after.second || (before && after.first->level() < level))
+        {
+            remove_node_from_level(level, before, after.first);
+            after = before->next(level);
+            continue;
+        }
+
+        if (!cmp_(after.first->value(), value))
+            break;
+
+        before = after.first;
+        after = before->next(level);
     }
 
-    return std::make_pair(before, after);
+    return std::make_pair(before, after.first);
 }
 
 template<typename T, int TSize, typename TLess>
 void skiplist_reservoir<T, TSize, TLess>::find_location(
         int level,
         const T &value,
-        std::array<std::pair<node *, node *>, width> &into) const noexcept
+        std::array<std::pair<node *, node *>, width> &into) noexcept
 {
     node *cbefore = nullptr;
     for (int i = width - 1; i >= level; i--)

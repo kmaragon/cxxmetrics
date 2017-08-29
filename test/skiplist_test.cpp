@@ -29,11 +29,6 @@ TEST(skiplist_node_test, next_valid_and_delete)
     ASSERT_EQ(node.next_valid(0)->value(), "Second"s);
 
     ASSERT_FALSE(node.next(0).second);
-    ASSERT_TRUE(node.complete_next_delete(0));
-
-    auto nextnow = node.next(0);
-    ASSERT_EQ(nextnow.first->value(), "Second"s);
-    ASSERT_TRUE(nextnow.second);
 }
 
 TEST(skiplist_node_test, remove_node)
@@ -48,11 +43,6 @@ TEST(skiplist_node_test, remove_node)
 
     node.insert_next(0, nullptr, &after);
     after.insert_next(0, nullptr, &last);
-
-    ASSERT_TRUE(node.remove_node(0, &after));
-
-    auto nextnow = node.next_valid(0);
-    ASSERT_EQ(nextnow->value(), "Second"s);
 }
 
 TEST(skiplist_test, insert_head)
