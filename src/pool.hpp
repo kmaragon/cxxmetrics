@@ -28,8 +28,8 @@ class pool_ptr
         pool<TValue, TAlloc> *source;
 
         pool_data(pool<TValue, TAlloc> *src, pool_data *n) :
-                source(src),
-                next(n)
+                next(n),
+                source(src)
         { }
 
         TValue &value()

@@ -123,7 +123,7 @@ public:
     bool insert_next(int level, skiplist_node *next, skiplist_node *node) noexcept
     {
         node->next_[level] = next;
-        next_[level].compare_exchange_strong(next, node);
+        return next_[level].compare_exchange_strong(next, node);
     }
 
     // replace the next node with newnext if expected is the next at this level
@@ -366,10 +366,7 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
         //    we establish that by seeing if the value is not less than the "after"
         //    which we already established as not being less than the value
         if (locations[0].second && !cmp_(value, locations[0].second->value()) && !locations[0].second->is_marked())
-        {
-            std::cout << "inserting " << insert_node << " but already found the value at " << locations[0].second << std::endl;
             return false;
-        }
 
         // 3. There is in fact, already a head. But the value we're inserting
         //    belongs in front of it. So it needs to become the new head
@@ -516,6 +513,8 @@ internal::skiplist_node<T, TSize> *skiplist_reservoir<T, TSize, TLess>::find_loc
 
         cbefore = fnd.first;
     }
+
+    return nullptr;
 }
 
 template<typename T, int TSize, typename TLess>
@@ -624,7 +623,6 @@ void skiplist_reservoir<T, TSize, TLess>::remove_node_from_level(int level, node
 
         remnode->mark_next_deleted(level, new_next.first);
 
-        auto cmpnode = remnode;
         // first make sure we cmpxchg that node
         if (!prev_hint->remove_next(level, remnode, new_next.first))
         {

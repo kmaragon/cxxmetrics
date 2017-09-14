@@ -118,6 +118,7 @@ public:
     rates_holder &operator=(const rates_holder &c) noexcept
     {
         rates_ = c.rates_;
+        return *this;
     }
 
     template<period::value TPeriod>
@@ -187,9 +188,9 @@ private:
     clock_diff interval_;
 public:
     explicit _meter_impl_base(const clock_diff &interval, const TClockGet &clkget) noexcept :
+            rates_(clkget, interval),
             clk_(clkget),
-            interval_(interval),
-            rates_(clkget, interval)
+            interval_(interval)
     { }
 
     _meter_impl_base(const _meter_impl_base &b) noexcept = default;
@@ -277,6 +278,8 @@ public:
         _meter_impl_base<TClockGet, TWindows...>::operator=(c);
         start_ = c.start_;
         total_.store(c.total_.load());
+
+        return *this;
     }
 
     inline double mean() const noexcept

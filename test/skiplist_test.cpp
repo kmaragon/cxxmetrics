@@ -149,7 +149,9 @@ TEST(skiplist_test, insert_threads_tail)
     {
         // assert on every 10th result
         if (!(x % 10))
+        {
             ASSERT_NE(list.find(0.17 * x), list.end());
+        }
         ASSERT_DOUBLE_EQ(values[x], 0.17 * x);
     }
 }
@@ -186,7 +188,9 @@ TEST(skiplist_test, insert_threads_head)
     {
         // assert on every 10th result
         if (!(x % 10))
+        {
             ASSERT_NE(list.find(0.17 * x), list.end());
+        }
         ASSERT_DOUBLE_EQ(values[x], 0.17 * x);
     }
 }

@@ -98,10 +98,7 @@ void ewma<TClockGet>::mark(int64_t amount) noexcept
 
     // See if we crossed the interval threshold. If so we need to tick
     if ((now - last_) >= interval_)
-    {
-        double expected = 0;
         tick(now);
-    }
 
     pending_ += amount;
 }

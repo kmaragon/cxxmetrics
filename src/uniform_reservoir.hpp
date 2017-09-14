@@ -28,7 +28,7 @@ class uniform_reservoir
         auto nano = std::chrono::duration_cast<std::chrono::nanoseconds>(full);
 
         auto seed = nano.count();
-        int size = sizeof(seed);
+        size_t size = sizeof(seed);
         while (size > sizeof(unsigned))
         {
             seed = (seed & 0xffffffff) ^ (seed >> 32);

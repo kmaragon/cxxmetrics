@@ -161,9 +161,9 @@ private:
 
 template<typename TElemType, size_t TSize>
 ringbuf<TElemType, TSize>::iterator::iterator() noexcept :
-        buf_(nullptr),
         offset_(-1),
-        headat_(0)
+        headat_(0),
+        buf_(nullptr)
 {
 };
 
@@ -387,7 +387,6 @@ void ringbuf<TElemType, TSize>::push(const TElemType &elem) noexcept
     while (true)
     {
         int64_t tail = tail_.fetch_add(1);
-        int64_t phead = head_.load();
         auto neededready = tail - 1;
 
         if (tail >= limit_)

@@ -69,8 +69,8 @@ timed_data<T, TClockGet>::timed_data(const TClockGet &clock) noexcept :
 
 template<typename T, typename TClockGet>
 timed_data<T, TClockGet>::timed_data(const T &val, const TClockGet &clock) noexcept :
-        value_(val),
-        time_(clock())
+        time_(clock()),
+        value_(val)
 {
 }
 
@@ -166,7 +166,7 @@ private:
 
         bool operator!=(const transform_iterator &other) const noexcept { return it_ != other.it_; }
 
-        transform_iterator &operator++() noexcept { ++it_; }
+        transform_iterator &operator++() noexcept { ++it_; return *this; }
 
         TElem operator*() const noexcept { return it_->value(); }
     };
