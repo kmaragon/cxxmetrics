@@ -363,7 +363,6 @@ TEST(skiplist_test, erase_threads_interspersed)
 
 }
 
-/*
 TEST(skiplist_test, erase_threads_tail)
 {
     skiplist_reservoir<double, 1024> list;
@@ -422,6 +421,7 @@ TEST(skiplist_test, erase_threads_tail)
     ASSERT_EQ(values.size(), 100);
 }
 
+/*
 TEST(skiplist_test, erase_threads_head)
 {
     skiplist_reservoir<double, 1024> list;

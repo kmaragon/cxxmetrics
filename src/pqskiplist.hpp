@@ -387,13 +387,15 @@ bool skiplist_reservoir<T, TSize, TLess>::erase(const iterator &value) noexcept
     if (value == end())
         return false;
 
-    // the magic of using this call is that the node won't actually be
-    // deallocated until the iterator is done with it. So it'll live
-    // through this function
     auto rmnode = value.node_;
 
     // first mark the node as being deleted
     if (!rmnode->mark_for_deletion())
+        return false;
+
+    // the iterator should do this - but we take a const iterator reference
+    // so let's just be safe
+    if (!rmnode->reference())
         return false;
 
     // now go through and remove it from the top level down to the bottom
@@ -415,6 +417,8 @@ bool skiplist_reservoir<T, TSize, TLess>::erase(const iterator &value) noexcept
         }
     }
 
+    // it's safe to free now
+    rmnode->dereference(*this);
     return true;
 }
 
