@@ -33,12 +33,17 @@ class skiplist_node
 public:
     static constexpr int width = const_log<TSize>::value;
     using ptr = std::atomic<skiplist_node *>;
+
 private:
     static constexpr unsigned long DELETE_MARKER = ((unsigned long) 1) << ((sizeof(void *) * 8) - 1);
     static constexpr unsigned int LEVEL_DELETE_MARKER = 1 << ((sizeof(int) * 8) - 1);
     std::array<ptr, width> next_;
     T value_;
-    std::atomic_int level_;
+
+    std::atomic_uint_fast64_t refs_;
+
+    std::atomic_uint_least16_t level_;
+    std::atomic_uint_least8_t inlist_;
 
 public:
     constexpr static skiplist_node *marked_ptr(skiplist_node *ptr)
@@ -61,6 +66,26 @@ public:
         return level_.load() & ~LEVEL_DELETE_MARKER;
     }
 
+    bool reference() noexcept
+    {
+        auto refs = refs_.load();
+        while (true)
+        {
+            if (refs == 0)
+                return false;
+
+            if (refs_.compare_exchange_strong(refs, refs + 1))
+                return true;
+        }
+    }
+
+    template<typename TAlloc>
+    void dereference(TAlloc &t) noexcept
+    {
+        if (refs_.fetch_sub(1) == 1)
+            t.deallocate(this);
+    }
+
     bool is_marked() const noexcept
     {
         return (level_.load() & LEVEL_DELETE_MARKER) != 0;
@@ -73,6 +98,7 @@ public:
 
     void init(const T &value, int level) noexcept
     {
+        refs_ = 1;
         level_ = level;
         value_ = value;
         for (int i = 0; i < width; i++)
@@ -100,8 +126,11 @@ public:
         next_[level].compare_exchange_strong(next, node);
     }
 
+    // replace the next node with newnext if expected is the next at this level
+    // requires that the next node has already been marked for deletion
     bool remove_next(int level, skiplist_node *expected, skiplist_node *newnext) noexcept
     {
+        expected = marked_ptr(expected);
         return next_[level].compare_exchange_strong(expected, newnext);
     }
 
@@ -134,72 +163,126 @@ private:
     using node_ptr = typename internal::skiplist_node<T, TSize>::ptr;
     TLess cmp_;
     node_ptr head_;
+    node_ptr freelist_head_;
 
     static std::default_random_engine random_;
 
     std::pair<node *, node *> find_location(node *before, int level, const T &value) const noexcept;
-    std::pair<node *, node *> find_location(int level, const T &value) const noexcept;
+    node * find_location(int level, const T &value) const noexcept;
     std::pair<node *, node *> find_location(node *before, int level, const T &value) noexcept;
     void find_location(int level, const T &value, std::array<std::pair<node *, node *>, width> &into) noexcept;
     void takeover_head(node *newhead, node *oldhead) noexcept;
     void finish_insert(int level, node *insertnode, std::array<std::pair<node *, node *>, width> &locations) noexcept;
     void remove_node_from_level(int level, node *prev_hint, node *remnode) noexcept;
     node *make_node(const T &value, int level);
+    void deallocate(node *nd);
+
+    friend class internal::skiplist_node<T, TSize>;
 public:
 
     class iterator : public std::iterator<std::input_iterator_tag, T>
     {
         friend class skiplist_reservoir;
+        internal::skiplist_node<T, TSize> *node_;
+        skiplist_reservoir *parent_;
 
+        explicit iterator(skiplist_reservoir *parent, internal::skiplist_node<T, TSize> *node) noexcept;
     public:
+        iterator() noexcept;
+        iterator(const iterator &iterator) noexcept;
+        ~iterator() noexcept;
+
+        iterator &operator++() noexcept;
+        bool operator==(const iterator &other) const noexcept;
+        bool operator!=(const iterator &other) const noexcept;
+        const T &operator*() const noexcept;
+        const T *operator->() const noexcept;
+
+        iterator &operator=(const iterator &other) noexcept;
     };
 
     skiplist_reservoir() noexcept;
 
     bool insert(const T &value) noexcept;
+    iterator begin() noexcept;
+    iterator end() const noexcept;
+    iterator find(const T &value) noexcept;
 };
 
 // used as a macro to retry in atomic loops
 #define yield_and_continue() std::this_thread::yield(); continue
-/*
-template<typename T, int TSize, typename TLess>
-skiplist<T, TSize, TLess>::iterator::iterator(const skiplist *list, const skiplist_node<T, TSize> *node) noexcept :
-        list_(list),
-        node_(node)
-{ }
 
 template<typename T, int TSize, typename TLess>
-skiplist<T, TSize, TLess>::iterator::iterator() noexcept :
-        list_(nullptr),
+skiplist_reservoir<T, TSize, TLess>::iterator::iterator(skiplist_reservoir *parent, internal::skiplist_node<T, TSize> *node) noexcept :
+        parent_(parent)
+{
+    while (node)
+    {
+        if (node->reference())
+            break;
+
+        node = node->next_valid(0);
+    }
+
+    node_ = node;
+}
+
+template<typename T, int TSize, typename TLess>
+skiplist_reservoir<T, TSize, TLess>::iterator::iterator() noexcept :
         node_(nullptr)
 { }
 
 template<typename T, int TSize, typename TLess>
-typename skiplist<T, TSize, TLess>::iterator &skiplist<T, TSize, TLess>::iterator::operator++() noexcept
+skiplist_reservoir<T, TSize, TLess>::iterator::iterator(const iterator &other) noexcept :
+        node_(other.node_),
+        parent_(other.parent_)
 {
-    if (!node_)
-        return *this;
+    if (node_)
+        node_->reference();
+}
 
+template<typename T, int TSize, typename TLess>
+skiplist_reservoir<T, TSize, TLess>::iterator::~iterator() noexcept
+{
+    if (node_)
+        node_->dereference(*parent_);
+}
+
+template<typename T, int TSize, typename TLess>
+typename skiplist_reservoir<T, TSize, TLess>::iterator &skiplist_reservoir<T, TSize, TLess>::iterator::operator++() noexcept
+{
     auto node = node_;
-    node_ = node ? node->next_valid() : nullptr;
+    auto pnode = node;
+
+    while (true)
+    {
+        node = node ? node->next_valid(0) : nullptr;
+        if (!node || node->reference())
+        {
+            if (pnode)
+                pnode->dereference(*parent_);
+            node_ = node;
+            return *this;
+        }
+    }
 
     return *this;
 }
 
 template<typename T, int TSize, typename TLess>
-bool skiplist<T, TSize, TLess>::iterator::operator==(const iterator &other) const noexcept
+bool skiplist_reservoir<T, TSize, TLess>::iterator::operator==(const iterator &other) const noexcept
 {
     return node_ == other.node_;
 };
 
 template<typename T, int TSize, typename TLess>
-bool skiplist<T, TSize, TLess>::iterator::operator!=(const iterator &other) const noexcept
+bool skiplist_reservoir<T, TSize, TLess>::iterator::operator!=(const iterator &other) const noexcept
 {
     return node_ != other.node_;
 }
 
 template<typename T, int TSize, typename TLess>
-const T *skiplist<T, TSize, TLess>::iterator::operator->() const noexcept
+const T *skiplist_reservoir<T, TSize, TLess>::iterator::operator->() const noexcept
 {
     if (!node_)
         return nullptr;
@@ -207,18 +290,34 @@ const T *skiplist<T, TSize, TLess>::iterator::operator->() const noexcept
 }
 
 template<typename T, int TSize, typename TLess>
-const T &skiplist<T, TSize, TLess>::iterator::operator*() const noexcept
+const T &skiplist_reservoir<T, TSize, TLess>::iterator::operator*() const noexcept
 {
     return node_->value();
 }
 
-*/
+template<typename T, int TSize, typename TLess>
+typename skiplist_reservoir<T, TSize, TLess>::iterator &skiplist_reservoir<T, TSize, TLess>::iterator::operator=(const iterator &other) noexcept
+{
+    auto pnode = node_;
+    node_ = other.node_;
+    if (pnode == node_)
+        return *this;
+
+    if (node_)
+        node_->reference();
+    if (pnode)
+        pnode->dereference(parent_);
+
+    return *this;
+}
+
 template<typename T, int TSize, typename TLess>
 std::default_random_engine skiplist_reservoir<T, TSize, TLess>::random_;
 
 template<typename T, int TSize, typename TLess>
 skiplist_reservoir<T, TSize, TLess>::skiplist_reservoir() noexcept :
-        head_(nullptr)
+        head_(nullptr),
+        freelist_head_(nullptr)
 {
 }
 
@@ -252,6 +351,14 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
             yield_and_continue();
         }
 
+        // let the removal of head complete
+        if (head->is_marked())
+        {
+            std::this_thread::yield();
+            head = head_.load();
+            continue;
+        }
+
         find_location(0, value, locations);
 
         // 2. We may be inserting a value that is already in the set. If so
@@ -259,7 +366,10 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
         //    we establish that by seeing if the value is not less than the "after"
         //    which we already established as not being less than the value
         if (locations[0].second && !cmp_(value, locations[0].second->value()) && !locations[0].second->is_marked())
+        {
+            std::cout << "inserting " << insert_node << " but already found the value at " << locations[0].second << std::endl;
             return false;
+        }
 
         // 3. There is in fact, already a head. But the value we're inserting
         //    belongs in front of it. So it needs to become the new head
@@ -313,6 +423,24 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
 }
 
 template<typename T, int TSize, typename TLess>
+typename skiplist_reservoir<T, TSize, TLess>::iterator skiplist_reservoir<T, TSize, TLess>::begin() noexcept
+{
+    return iterator(this, head_.load());
+}
+
+template<typename T, int TSize, typename TLess>
+typename skiplist_reservoir<T, TSize, TLess>::iterator skiplist_reservoir<T, TSize, TLess>::end() const noexcept
+{
+    return iterator();
+}
+
+template<typename T, int TSize, typename TLess>
+typename skiplist_reservoir<T, TSize, TLess>::iterator skiplist_reservoir<T, TSize, TLess>::find(const T &value) noexcept
+{
+    return iterator(this, find_location(0, value));
+}
+
+template<typename T, int TSize, typename TLess>
 std::pair<typename skiplist_reservoir<T, TSize, TLess>::node *, typename skiplist_reservoir<T, TSize, TLess>::node *>
 skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, const T &value) noexcept
 {
@@ -326,7 +454,10 @@ skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, cons
         // if our next node is marked for deletion
         // or if it doesn't belong on this level (probably because
         // it used to be head and got moved here)
-        if (!after.second || (before && after.first->level() < level))
+        if (before && after.first->level() < level)
+            after.second = after.second && !before->mark_next_deleted(level, after.first);
+
+        if (!after.second)
         {
             remove_node_from_level(level, before, after.first);
             after = before->next(level);
@@ -344,6 +475,50 @@ skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, cons
 }
 
 template<typename T, int TSize, typename TLess>
+std::pair<typename skiplist_reservoir<T, TSize, TLess>::node *, typename skiplist_reservoir<T, TSize, TLess>::node *>
+skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, const T &value) const noexcept
+{
+    auto head_pair = [level, this]() {
+        auto head = head_.load();
+        while (head && head->is_marked())
+            head = head->next_valid(level);
+
+        return head;
+    };
+
+    auto after = before ? before->next_valid(level) : head_pair();
+    while (after)
+    {
+        if (!cmp_(after->value(), value))
+            break;
+
+        before = after;
+        after = before->next_valid(level);
+    }
+
+    return std::make_pair(before, after);
+}
+
+
+template<typename T, int TSize, typename TLess>
+internal::skiplist_node<T, TSize> *skiplist_reservoir<T, TSize, TLess>::find_location(int level, const T &value) const noexcept
+{
+    node *cbefore = nullptr;
+    for (int i = width - 1; i >= level; i--)
+    {
+        auto fnd = find_location(cbefore, i, value);
+
+        if (fnd.second && !cmp_(fnd.second->value(), value))
+            return fnd.second;
+
+        if (!fnd.first)
+            return nullptr;
+
+        cbefore = fnd.first;
+    }
+}
+
+template<typename T, int TSize, typename TLess>
 void skiplist_reservoir<T, TSize, TLess>::find_location(
         int level,
         const T &value,
@@ -353,9 +528,12 @@ void skiplist_reservoir<T, TSize, TLess>::find_location(
     for (int i = width - 1; i >= level; i--)
     {
         into[i] = find_location(cbefore, i, value);
+
         if (!into[i].first)
         {
-            into[level] = std::make_pair<node *, node *>(nullptr, nullptr);
+            auto answer = into[i];
+            for (--i; i >= level; i--)
+                into[i] = answer;
             break;
         }
 
@@ -366,7 +544,22 @@ void skiplist_reservoir<T, TSize, TLess>::find_location(
 template<typename T, int TSize, typename TLess>
 internal::skiplist_node<T, TSize> *skiplist_reservoir<T, TSize, TLess>::make_node(const T &value, int level)
 {
-    // TODO - implement the means of recycling nodes rather than leaking memory
+    // try to get a node out of our free list
+    auto flhead = freelist_head_.load();
+    while (true)
+    {
+        if (flhead == nullptr) // nope, nothing in the freelist
+            break;
+
+        auto next = flhead->next(0).first;
+        if (freelist_head_.compare_exchange_strong(flhead, next))
+        {
+            flhead->init(value, level);
+            return flhead;
+        }
+    }
+
+    // We had no free nodes
     auto result = new internal::skiplist_node<T, TSize>();
     result->init(value, level);
 
@@ -409,48 +602,33 @@ void skiplist_reservoir<T, TSize, TLess>::remove_node_from_level(int level, node
 
                 if (!pnext.first || cmp_(pnext.first->value(), remnode->value()))
                 {
-                    // if our removing node is lest then our current previous node
+                    // if our removing node is less than our current previous node
                     // then it's already gone
                     return;
                 }
             }
         }
 
+        // So we'll find our next node that we'll take over.
+        // We're going to leave it in remnode but mark the
+        // next ptr as being deleted so it won't get replaced
+        // the attempt to remove it will be fine. Removing
+        // a node won't change the removing node's pointers
+        // TODO verify that
         auto new_next = remnode->next(level);
+        while (new_next.first && (!new_next.second || new_next.first->is_marked()))
+        {
+            remove_node_from_level(level, remnode, new_next.first);
+            new_next = remnode->next(level);
+        }
+
+        remnode->mark_next_deleted(level, new_next.first);
+
         auto cmpnode = remnode;
         // first make sure we cmpxchg that node
         if (!prev_hint->remove_next(level, remnode, new_next.first))
         {
             yield_and_continue();
-        }
-
-        // this is our kind of volatile state. Our
-        // prev_hint is no longer pointing it's next to remnode
-        // but remnode might have had a *different* next inserted
-        // that node will still be accessible at lower levels
-        // and this get's called from highest to lowest
-        pnext = remnode->next(level);
-        if (pnext.first != new_next.first)
-        {
-            auto rnnext = pnext.first;
-
-            // damnit! our remnode got a new next inserted
-            // So we have to swap that one instead
-            while (true)
-            {
-                if (!prev_hint->insert_next(level, new_next.first, rnnext))
-                {
-                    // :-( and now the node we're inserting got a new next
-                    // so we have to scan to the node pointing at our
-                    // old next that'll get properly replaced
-                    prev_hint = prev_hint->next(level).first;
-                    if (!prev_hint)
-                        break;
-                }
-            }
-
-            // we don't need to worry about remnode continuing to get a node inserted
-            // after it because it's been pulled out of the chain at this level
         }
 
         return;
@@ -477,6 +655,19 @@ void skiplist_reservoir<T, TSize, TLess>::finish_insert(
     }
 }
 
+template<typename T, int TSize, typename TLess>
+void skiplist_reservoir<T, TSize, TLess>::deallocate(node *nd)
+{
+    // we can drop this into the freelist
+    auto flhead = freelist_head_.load();
+    while (true)
+    {
+        nd->set_next(0, flhead);
+
+        if (freelist_head_.compare_exchange_strong(flhead, nd))
+            break;
+    }
+}
 #undef yield_and_continue
 }
 

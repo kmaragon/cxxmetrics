@@ -198,13 +198,13 @@ public:
     template<period::value TPeriod>
     constexpr double get_rate() const
     {
-        return rates_.get_rate<TPeriod>().rate();
+        return rates_.template get_rate<TPeriod>().rate();
     }
 
     template<period::value TPeriod>
     constexpr double get_rate()
     {
-        return rates_.get_rate<TPeriod>().rate();
+        return rates_.template get_rate<TPeriod>().rate();
     }
 
     constexpr void each(const auto &fn)

@@ -50,24 +50,18 @@ TEST(skiplist_test, insert_head)
     skiplist_reservoir<double, 128> list;
 
     ASSERT_TRUE(list.insert(8.9988));
-    ASSERT_TRUE(list.insert(3));
-    ASSERT_TRUE(list.insert(45));
-    ASSERT_TRUE(list.insert(98));
-    ASSERT_TRUE(list.insert(23));
-    ASSERT_FALSE(list.insert(45));
 
-    //std::vector<double> values(list.begin(), list.end());
-    //ASSERT_EQ(values.size(), 1);
-    //ASSERT_DOUBLE_EQ(values[0], 8.9988);
+    std::vector<double> values(list.begin(), list.end());
+    ASSERT_EQ(values.size(), 1);
+    ASSERT_DOUBLE_EQ(values[0], 8.9988);
 
-    //ASSERT_NE(list.find(8.9988), list.end());
+    ASSERT_NE(list.find(8.9988), list.end());
 }
 
 
-/*
 TEST(skiplist_test, insert_additional)
 {
-    skiplist<double> list;
+    skiplist_reservoir<double, 128> list;
 
     list.insert(8.9988);
     list.insert(15.6788);
@@ -90,12 +84,12 @@ TEST(skiplist_test, insert_additional)
 
 TEST(skiplist_test, insert_duplicate)
 {
-    skiplist<double> list;
+    skiplist_reservoir<double, 128> list;
 
-    list.insert(8.9988);
-    list.insert(15.6788);
-    list.insert(8.9988);
-    list.insert(5233.05);
+    ASSERT_TRUE(list.insert(8.9988));
+    ASSERT_TRUE(list.insert(15.6788));
+    ASSERT_FALSE(list.insert(8.9988));
+    ASSERT_TRUE(list.insert(5233.05));
 
     std::vector<double> values(list.begin(), list.end());
     ASSERT_EQ(values.size(), 3);
@@ -106,7 +100,7 @@ TEST(skiplist_test, insert_duplicate)
 
 TEST(skiplist_test, insert_lower)
 {
-    skiplist<double> list;
+    skiplist_reservoir<double, 128> list;
 
     list.insert(8000);
     list.insert(1000.4050001);
@@ -125,7 +119,7 @@ TEST(skiplist_test, insert_lower)
 
 TEST(skiplist_test, insert_threads_tail)
 {
-    skiplist<double, 16> list;
+    skiplist_reservoir<double, 1024> list;
     atomic_uint_fast64_t at(0);
     vector<thread> workers;
 
@@ -162,7 +156,7 @@ TEST(skiplist_test, insert_threads_tail)
 
 TEST(skiplist_test, insert_threads_head)
 {
-    skiplist<double, 16> list;
+    skiplist_reservoir<double, 1024> list;
     atomic_uint_fast64_t at(999);
     vector<thread> workers;
 
@@ -197,6 +191,7 @@ TEST(skiplist_test, insert_threads_head)
     }
 }
 
+/*
 TEST(skiplist_test, erase_head_on_a_few)
 {
     skiplist<double> list;
