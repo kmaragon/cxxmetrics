@@ -11,7 +11,7 @@ set(HEADERS
         meta.hpp
         metric.hpp
         pool.hpp
-        pqskiplist.hpp
+        skiplist.hpp
         reservoir.hpp
         ringbuf.hpp
         simple_reservoir.hpp

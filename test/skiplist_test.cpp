@@ -5,7 +5,7 @@
 
 #include <execinfo.h>
 
-#include "pqskiplist.hpp"
+#include "skiplist.hpp"
 
 using namespace std;
 using namespace cxxmetrics;
@@ -55,7 +55,7 @@ TEST(skiplist_node_test, remove_node)
 
 TEST(skiplist_test, insert_head)
 {
-    skiplist_reservoir<double, 128> list;
+    skiplist<double, 128> list;
 
     ASSERT_TRUE(list.insert(8.9988));
 
@@ -69,7 +69,7 @@ TEST(skiplist_test, insert_head)
 
 TEST(skiplist_test, insert_additional)
 {
-    skiplist_reservoir<double, 128> list;
+    skiplist<double, 128> list;
 
     ASSERT_TRUE(list.insert(8.9988));
     ASSERT_TRUE(list.insert(15.6788));
@@ -92,7 +92,7 @@ TEST(skiplist_test, insert_additional)
 
 TEST(skiplist_test, insert_duplicate)
 {
-    skiplist_reservoir<double, 128> list;
+    skiplist<double, 128> list;
 
     ASSERT_TRUE(list.insert(8.9988));
     ASSERT_TRUE(list.insert(15.6788));
@@ -108,7 +108,7 @@ TEST(skiplist_test, insert_duplicate)
 
 TEST(skiplist_test, insert_lower)
 {
-    skiplist_reservoir<double, 128> list;
+    skiplist<double, 128> list;
 
     ASSERT_TRUE(list.insert(8000));
     ASSERT_TRUE(list.insert(1000.4050001));
@@ -127,7 +127,7 @@ TEST(skiplist_test, insert_lower)
 
 TEST(skiplist_test, find_returns_as_expected)
 {
-    skiplist_reservoir<double, 128> list;
+    skiplist<double, 128> list;
 
     ASSERT_TRUE(list.insert(8000));
     ASSERT_NE(list.find(8000), list.end());
@@ -137,7 +137,7 @@ TEST(skiplist_test, find_returns_as_expected)
 
 TEST(skiplist_test, insert_threads_tail)
 {
-    skiplist_reservoir<double, 1024> list;
+    skiplist<double, 1024> list;
     atomic_uint_fast64_t at(0);
     vector<thread> workers;
 
@@ -176,7 +176,7 @@ TEST(skiplist_test, insert_threads_tail)
 
 TEST(skiplist_test, insert_threads_head)
 {
-    skiplist_reservoir<double, 1024> list;
+    skiplist<double, 1024> list;
     atomic_uint_fast64_t at(999);
     vector<thread> workers;
 
@@ -215,7 +215,7 @@ TEST(skiplist_test, insert_threads_head)
 
 TEST(skiplist_test, erase_head_on_a_few)
 {
-    skiplist_reservoir<double, 32> list;
+    skiplist<double, 32> list;
 
     ASSERT_TRUE(list.insert(8000));
     ASSERT_TRUE(list.insert(1000.4050001));
@@ -238,7 +238,7 @@ TEST(skiplist_test, erase_head_on_a_few)
 
 TEST(skiplist_test, erase_tail_on_a_few)
 {
-    skiplist_reservoir<double, 32> list;
+    skiplist<double, 32> list;
 
     ASSERT_TRUE(list.insert(8000));
     ASSERT_TRUE(list.insert(1000.4050001));
@@ -261,7 +261,7 @@ TEST(skiplist_test, erase_tail_on_a_few)
 
 TEST(skiplist_test, erase_mid_on_a_few)
 {
-    skiplist_reservoir<double, 32> list;
+    skiplist<double, 32> list;
 
     ASSERT_TRUE(list.insert(8000));
     ASSERT_TRUE(list.insert(1000.4050001));
@@ -284,7 +284,7 @@ TEST(skiplist_test, erase_mid_on_a_few)
 
 TEST(skiplist_test, invalidated_iterator_still_works)
 {
-    skiplist_reservoir<double, 32> list;
+    skiplist<double, 32> list;
 
     ASSERT_TRUE(list.insert(8000));
     ASSERT_TRUE(list.insert(5233.05));
@@ -316,7 +316,7 @@ TEST(skiplist_test, invalidated_iterator_still_works)
 
 TEST(skiplist_test, erase_threads_interspersed)
 {
-    skiplist_reservoir<double, 1024> list;
+    skiplist<double, 1024> list;
 
     atomic_uint_fast64_t at(0);
     vector<thread> workers;
@@ -365,7 +365,7 @@ TEST(skiplist_test, erase_threads_interspersed)
 
 TEST(skiplist_test, erase_threads_tail)
 {
-    skiplist_reservoir<double, 1024> list;
+    skiplist<double, 1024> list;
     vector<thread> workers;
     std::atomic_uint_fast16_t at(0);
 
@@ -423,7 +423,7 @@ TEST(skiplist_test, erase_threads_tail)
 
 TEST(skiplist_test, erase_threads_head)
 {
-    skiplist_reservoir<double, 1024> list;
+    skiplist<double, 1024> list;
     vector<thread> workers;
     std::atomic_uint_fast16_t at(0);
 
