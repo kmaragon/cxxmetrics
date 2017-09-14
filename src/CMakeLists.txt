@@ -15,7 +15,6 @@ set(HEADERS
         reservoir.hpp
         ringbuf.hpp
         simple_reservoir.hpp
-        skiplist.hpp
         sliding_window.hpp
         tag_set.hpp
         time.hpp
