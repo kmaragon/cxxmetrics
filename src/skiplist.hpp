@@ -503,6 +503,7 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
         // it's not deleted while we're using it
         if (!locations[0].first->reference())
         {
+            head = head_.load();
             yield_and_continue();
         }
 
@@ -510,6 +511,7 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
         {
             // ok - well the node got marked - let's try again
             locations[0].first->dereference(*this);
+            head = head_;
             yield_and_continue();
         }
 
@@ -782,17 +784,26 @@ void skiplist<T, TSize, TLess>::finish_insert(
     // which we'll do as long as the node isn't marked
     while (!insertnode->is_marked())
     {
-        if (locations[level].first->insert_next(level, locations[level].second, insertnode))
+        if (locations[level].first && locations[level].first->insert_next(level, locations[level].second, insertnode))
             return;
 
         // that failed. We need to rescan the locations for the level
         find_location(level, insertnode->value(), locations);
+
+        if (locations[level].first == nullptr)
+        {
+            // all the possible predecessors for the node have been removed.
+            // that means this one will have had to have been set up
+            break;
+        }
     }
 }
 
 template<typename T, int TSize, typename TLess>
 void skiplist<T, TSize, TLess>::deallocate(node *nd)
 {
+    // TODO - this is called prematurely
+    //        all local use of nodes needs to be pinned to prevent this
     nd->init(0, -1);
     return;
     // we can drop this into the freelist

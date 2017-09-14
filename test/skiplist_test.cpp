@@ -464,9 +464,4 @@ TEST(skiplist_test, erase_threads_head)
         ASSERT_LT(last, *current);
         last = *current;
     }
-
-    // let's run once more and then size it up
-    fn();
-    std::vector<double> values(list.begin(), list.end());
-    ASSERT_EQ(values.size(), 1000);
 }
