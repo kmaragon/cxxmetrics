@@ -150,7 +150,6 @@ public:
         if (node != nullptr)
         {
             node->next_[level] = next;
-            assert(node->value() > value());
         }
         return next_[level].compare_exchange_strong(next, node);
     }
@@ -160,7 +159,6 @@ public:
     bool remove_next(int level, skiplist_node *expected, skiplist_node *newnext) noexcept
     {
         expected = marked_ptr(expected);
-        assert(!newnext || newnext->value() > value());
         return next_[level].compare_exchange_strong(expected, newnext);
     }
 
@@ -472,7 +470,7 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
 
         // 3. There is in fact, already a head. But the value we're inserting
         //    belongs in front of it. So it needs to become the new head
-        if (!locations[0].first)
+        if (!locations[0].first || (locations[0].first == head && head->is_marked()))
         {
             // for now, we will set our next to be the head on every level
             // that will ensure that if any nodes get inserted after the head
@@ -572,12 +570,13 @@ template<typename T, int TSize, typename TLess>
 std::pair<typename skiplist_reservoir<T, TSize, TLess>::node *, typename skiplist_reservoir<T, TSize, TLess>::node *>
 skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, const T &value) noexcept
 {
-    assert(before == nullptr || before->value() < value);
-
     auto head_pair = [this]() {
         auto head = head_.load();
-        return std::make_pair(head, !head->is_marked());
+        if (head)
+            return std::make_pair(head, !head->is_marked());
+        return std::make_pair((node *)nullptr, false);
     };
+
     auto after = before ? before->next(level) : head_pair();
     while (after.first)
     {
@@ -596,12 +595,8 @@ skiplist_reservoir<T, TSize, TLess>::find_location(node *before, int level, cons
 
         before = after.first;
         after = before->next(level);
-
-        assert(before == nullptr || before->value() < value);
     }
 
-    assert(before == nullptr || before->value() < value);
-    assert(after.first == nullptr || after.first->value() >= value);
     return std::make_pair(before, after.first);
 }
 

@@ -421,7 +421,6 @@ TEST(skiplist_test, erase_threads_tail)
     ASSERT_EQ(values.size(), 100);
 }
 
-/*
 TEST(skiplist_test, erase_threads_head)
 {
     skiplist_reservoir<double, 1024> list;
@@ -451,7 +450,7 @@ TEST(skiplist_test, erase_threads_head)
         }
     };
 
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 1; i++)
         workers.emplace_back(fn);
 
     for (auto &thr : workers)
@@ -471,4 +470,3 @@ TEST(skiplist_test, erase_threads_head)
     std::vector<double> values(list.begin(), list.end());
     ASSERT_EQ(values.size(), 1000);
 }
-*/
