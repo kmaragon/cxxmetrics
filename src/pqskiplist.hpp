@@ -116,7 +116,7 @@ public:
     bool set_next(int level, skiplist_node *node) noexcept
     {
         next_[level] = node;
-        return !node->is_marked();
+        return (node == nullptr) || !node->is_marked();
     }
 
     // inserts the given node as the next node after this
@@ -202,6 +202,7 @@ public:
     };
 
     skiplist_reservoir() noexcept;
+    ~skiplist_reservoir();
 
     bool insert(const T &value) noexcept;
     iterator begin() noexcept;
@@ -312,6 +313,27 @@ typename skiplist_reservoir<T, TSize, TLess>::iterator &skiplist_reservoir<T, TS
 }
 
 template<typename T, int TSize, typename TLess>
+skiplist_reservoir<T, TSize, TLess>::~skiplist_reservoir()
+{
+    auto flhead = freelist_head_.exchange(nullptr);
+    auto head = head_.exchange(nullptr);
+
+    while (head)
+    {
+        auto next = head->next(0);
+        delete head;
+        head = next.first;
+    }
+
+    while (flhead)
+    {
+        auto next = flhead->next(0);
+        delete flhead;
+        flhead = next.first;
+    }
+}
+
+template<typename T, int TSize, typename TLess>
 std::default_random_engine skiplist_reservoir<T, TSize, TLess>::random_;
 
 template<typename T, int TSize, typename TLess>
@@ -366,7 +388,10 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
         //    we establish that by seeing if the value is not less than the "after"
         //    which we already established as not being less than the value
         if (locations[0].second && !cmp_(value, locations[0].second->value()) && !locations[0].second->is_marked())
+        {
+            insert_node->dereference(*this);
             return false;
+        }
 
         // 3. There is in fact, already a head. But the value we're inserting
         //    belongs in front of it. So it needs to become the new head
@@ -415,8 +440,6 @@ bool skiplist_reservoir<T, TSize, TLess>::insert(const T &value) noexcept
         head = head_.load();
         yield_and_continue();
     }
-
-    return false;
 }
 
 template<typename T, int TSize, typename TLess>
@@ -592,6 +615,12 @@ void skiplist_reservoir<T, TSize, TLess>::remove_node_from_level(int level, node
             // our prev_hint is no longer pointing to remnode
             // but prev_hint *must* be non-null and must be
             // logically in front of remnode
+            if (!pnext.first)
+            {
+                // our previous node has no next, so obviously remnode isn't in the chain at all
+                return;
+            }
+
             while (pnext.first)
             {
                 prev_hint = pnext.first;
@@ -621,7 +650,8 @@ void skiplist_reservoir<T, TSize, TLess>::remove_node_from_level(int level, node
             new_next = remnode->next(level);
         }
 
-        remnode->mark_next_deleted(level, new_next.first);
+        if (new_next.first != nullptr)
+            remnode->mark_next_deleted(level, new_next.first);
 
         // first make sure we cmpxchg that node
         if (!prev_hint->remove_next(level, remnode, new_next.first))

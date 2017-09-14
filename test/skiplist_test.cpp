@@ -198,7 +198,7 @@ TEST(skiplist_test, insert_threads_head)
 /*
 TEST(skiplist_test, erase_head_on_a_few)
 {
-    skiplist<double> list;
+    skiplist_reservoir<double, 32> list;
 
     list.insert(8000);
     list.insert(1000.4050001);
@@ -218,7 +218,9 @@ TEST(skiplist_test, erase_head_on_a_few)
     ASSERT_DOUBLE_EQ(values[2], 5233.05);
     ASSERT_DOUBLE_EQ(values[3], 8000);
 }
+*/
 
+/*
 TEST(skiplist_test, erase_tail_on_a_few)
 {
     skiplist<double> list;
