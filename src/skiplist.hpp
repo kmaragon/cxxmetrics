@@ -46,24 +46,90 @@ private:
     std::atomic_uint_least8_t inlist_;
 
 public:
-    constexpr static skiplist_node *marked_ptr(skiplist_node *ptr)
+    constexpr static skiplist_node *marked_ptr(skiplist_node *ptr) noexcept
     {
         return reinterpret_cast<skiplist_node *>(reinterpret_cast<unsigned long>(ptr) | DELETE_MARKER);
     }
 
-    constexpr static skiplist_node *unmarked_ptr(skiplist_node *ptr)
+    constexpr static skiplist_node *unmarked_ptr(skiplist_node *ptr) noexcept
     {
         return reinterpret_cast<skiplist_node *>(reinterpret_cast<unsigned long>(ptr) & ~DELETE_MARKER);
     }
 
-    constexpr static bool ptr_is_marked(skiplist_node *ptr)
+    constexpr static bool ptr_is_marked(skiplist_node *ptr) noexcept
     {
         return (reinterpret_cast<unsigned long>(ptr) & DELETE_MARKER) != 0;
     }
 
+#ifndef NDEBUG
+    constexpr auto refcnt() const noexcept
+    {
+        return refs_.load();
+    }
+#endif
+
     int level() const noexcept
     {
         return level_.load() & ~LEVEL_DELETE_MARKER;
+    }
+
+    static inline void print_backtrace(std::ostream &to)
+    {
+        void *bt[10];
+        char *demangle_buf = (char *)malloc(512);
+
+        auto bsz = backtrace(bt, 10);
+        auto bs = backtrace_symbols(bt, bsz);
+        for (int i = 0; i < bsz; i++)
+        {
+            size_t len = 512;
+            int status;
+
+            auto sname = bs[i];
+            if (strstr(sname, "print_backtrace"))
+                continue;
+
+            while (*sname)
+            {
+                if (*(sname++) == '(')
+                    break;
+            }
+
+            char atchr = 0;
+            char *atloc = nullptr;
+            if (*sname)
+            {
+                for (char *at = sname; *at; ++at)
+                {
+                    if (*at == ')' || *at == '+')
+                    {
+                        atchr = *at;
+                        *at = 0;
+                        atloc = at + 1;
+                        break;
+                    }
+                }
+
+                abi::__cxa_demangle(sname, demangle_buf, &len, &status);
+                if (!status)
+                {
+                    demangle_buf[len] = 0;
+                    to << demangle_buf;
+                    if (atloc)
+                        to << " at (" << atloc;
+                    to << std::endl;
+                    continue;
+                }
+            }
+
+            if (atloc)
+                *(atloc-1) = atchr;
+
+            to << bs[i] << std::endl;
+        }
+
+        free(demangle_buf);
+        free(bs);
     }
 
     bool reference() noexcept
@@ -75,7 +141,17 @@ public:
                 return false;
 
             if (refs_.compare_exchange_strong(refs, refs + 1))
+            {
+                /* backtrace
+                std::stringstream str;
+                str << "Thread " << std::this_thread::get_id() << std::endl;
+                str << "reference to " << (refs + 1) << " value " << value() << " level " << level() << " at:" << std::endl;
+                print_backtrace(str);
+                std::cout << str.str() << std::endl << std::endl;
+                /* /backtrace */
+
                 return true;
+            }
         }
     }
 
@@ -93,6 +169,14 @@ public:
                 // we successfully dropped the references
                 if (refs == 1)
                     t.deallocate(this);
+
+                /* backtrace
+                std::stringstream str;
+                str << "Thread " << std::this_thread::get_id() << std::endl;
+                str << "dereference to " << (refs - 1) << " value " << value() << (refs == 1 ? " (deleted)" : " ") << " level " << level() << " at:" << std::endl;
+                print_backtrace(str);
+                std::cout << str.str() << std::endl << std::endl;
+                /* /backtrace */
                 return;
             }
         }
@@ -173,12 +257,167 @@ public:
 
     bool mark_next_deleted(int level, skiplist_node *&if_matches) noexcept
     {
+        if (ptr_is_marked(if_matches))
+        {
+            if_matches = unmarked_ptr(next_[level].load());
+            return false;
+        }
+
         bool result = next_[level].compare_exchange_strong(if_matches, marked_ptr(if_matches));
         if_matches = unmarked_ptr(if_matches);
         return result;
     }
 
 };
+
+template<typename T, int TSize, typename TAlloc>
+class skiplist_node_pin;
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc> pin_node(skiplist_node<T, TSize> *node, TAlloc &allocator) noexcept;
+
+template<typename T, int TSize, typename TAlloc>
+class skiplist_node_pin
+{
+    skiplist_node<T, TSize> *ptr_;
+    TAlloc *alloc_;
+
+    skiplist_node_pin(skiplist_node<T, TSize> *node, TAlloc &allocator) noexcept;
+
+    friend skiplist_node_pin<T, TSize, TAlloc> pin_node<T, TSize, TAlloc>(skiplist_node<T, TSize> *node, TAlloc &allocator) noexcept;
+public:
+    skiplist_node_pin() noexcept;
+    skiplist_node_pin(const skiplist_node_pin &) noexcept;
+    skiplist_node_pin(skiplist_node_pin &&mv) noexcept;
+    ~skiplist_node_pin() noexcept;
+
+    skiplist_node_pin &operator=(const skiplist_node_pin &cp) noexcept;
+    skiplist_node_pin &operator=(skiplist_node_pin &&mv) noexcept;
+    skiplist_node<T, TSize> *operator->() const noexcept;
+    operator bool() const noexcept;
+    bool operator==(const skiplist_node_pin &other) const noexcept;
+    bool operator!=(const skiplist_node_pin &other) const noexcept;
+
+    TAlloc &allocator() noexcept
+    {
+        return *alloc_;
+    }
+
+    skiplist_node<T, TSize> *get() const noexcept
+    {
+        return ptr_;
+    };
+};
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc> pin_node(skiplist_node<T, TSize> *node, TAlloc &allocator) noexcept
+{
+    if (node && !node->reference())
+        return skiplist_node_pin<T, TSize, TAlloc>();
+
+    return std::move(skiplist_node_pin<T, TSize, TAlloc>(node, allocator));
+}
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc>::skiplist_node_pin(skiplist_node<T, TSize> *node, TAlloc &allocator) noexcept :
+        ptr_(node),
+        alloc_(&allocator)
+{ }
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc>::skiplist_node_pin() noexcept :
+        ptr_(nullptr),
+        alloc_(nullptr)
+{ }
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc>::skiplist_node_pin(const skiplist_node_pin &other) noexcept
+{
+    ptr_ = other.ptr_;
+    if (ptr_ && !ptr_->reference())
+        ptr_ = nullptr;
+
+    alloc_ = other.alloc_;
+}
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc>::skiplist_node_pin(skiplist_node_pin &&mv) noexcept :
+        ptr_(mv.ptr_),
+        alloc_(mv.alloc_)
+{
+    mv.ptr_ = nullptr;
+    mv.alloc_ = nullptr;
+}
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc>::~skiplist_node_pin() noexcept
+{
+    if (ptr_ && alloc_)
+        ptr_->dereference(*alloc_);
+}
+
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc> &skiplist_node_pin<T, TSize, TAlloc>::operator=(const skiplist_node_pin &cp) noexcept
+{
+    auto cpptr = cp.ptr_;
+    if (ptr_ == cpptr)
+        return *this;
+
+    if (cpptr)
+        cpptr->reference();
+
+    if (ptr_ && alloc_)
+        ptr_->dereference(*alloc_);
+
+    ptr_ = cpptr;
+    alloc_ = cp.alloc_;
+
+    return *this;
+}
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc> &skiplist_node_pin<T, TSize, TAlloc>::operator=(skiplist_node_pin &&mv) noexcept
+{
+    auto mvptr = mv.ptr_;
+    if (ptr_ == mvptr)
+        return *this;
+
+    mv.ptr_ = nullptr;
+    if (ptr_ && alloc_)
+        ptr_->dereference(*alloc_);
+
+    ptr_ = mvptr;
+    alloc_ = mv.alloc_;
+
+    mv.alloc_ = nullptr;
+
+    return *this;
+}
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node<T, TSize> *skiplist_node_pin<T, TSize, TAlloc>::operator->() const noexcept
+{
+    return ptr_;
+}
+
+template<typename T, int TSize, typename TAlloc>
+skiplist_node_pin<T, TSize, TAlloc>::operator bool() const noexcept
+{
+    return (ptr_ != nullptr);
+}
+
+template<typename T, int TSize, typename TAlloc>
+bool skiplist_node_pin<T, TSize, TAlloc>::operator==(const skiplist_node_pin &other) const noexcept
+{
+    return (ptr_ == other.ptr_);
+}
+
+template<typename T, int TSize, typename TAlloc>
+bool skiplist_node_pin<T, TSize, TAlloc>::operator!=(const skiplist_node_pin &other) const noexcept
+{
+    return (ptr_ != other.ptr_);
+}
 
 }
 
@@ -189,6 +428,7 @@ public:
     static constexpr int width = internal::skiplist_node<T, TSize>::width;
 
 private:
+    using pin = internal::skiplist_node_pin<T, TSize, skiplist>;
     using node = internal::skiplist_node<T, TSize>;
     using node_ptr = typename internal::skiplist_node<T, TSize>::ptr;
     TLess cmp_;
@@ -199,13 +439,33 @@ private:
 
     std::pair<node *, node *> find_location(node *before, int level, const T &value) const noexcept;
     node * find_location(int level, const T &value) const noexcept;
-    std::pair<node *, node *> find_location(node *before, int level, const T &value) noexcept;
-    void find_location(int level, const T &value, std::array<std::pair<node *, node *>, width> &into) noexcept;
-    void takeover_head(node *newhead, node *oldhead) noexcept;
-    void finish_insert(int level, node *insertnode, std::array<std::pair<node *, node *>, width> &locations) noexcept;
-    void remove_node_from_level(int level, node *prev_hint, node *remnode) noexcept;
+    std::pair<pin, pin> find_location(pin &before, int level, const T &value) noexcept;
+    void find_location(int level, const T &value, std::array<std::pair<pin, pin>, width> &into) noexcept;
+    void takeover_head(pin &newhead, pin &oldhead) noexcept;
+    void finish_insert(int level, pin &insertnode, std::array<std::pair<pin, pin>, width> &locations) noexcept;
+    void remove_node_from_level(int level, const pin &prev_hint, const pin &remnode) noexcept;
     node *make_node(const T &value, int level);
     void deallocate(node *nd);
+
+    auto pin_next(int level, const pin &node)
+    {
+        while (true)
+        {
+            if (!node)
+                return std::move(std::make_pair(pin(), false));
+
+            auto nxt = node->next(level);
+            if (!nxt.first)
+                return std::move(std::make_pair(pin(), nxt.second));
+
+            auto pinned = std::move(internal::pin_node(nxt.first, *this));
+            if (pinned)
+                return std::move(std::make_pair(std::move(pinned), nxt.second));
+
+            if (node->is_marked())
+                return std::move(std::make_pair(pin(), nxt.second));
+        }
+    }
 
     friend class internal::skiplist_node<T, TSize>;
 public:
@@ -213,13 +473,12 @@ public:
     class iterator : public std::iterator<std::input_iterator_tag, T>
     {
         friend class skiplist;
-        internal::skiplist_node<T, TSize> *node_;
-        skiplist *parent_;
+        internal::skiplist_node_pin<T, TSize, skiplist> node_;
 
-        explicit iterator(skiplist *parent, internal::skiplist_node<T, TSize> *node) noexcept;
+        explicit iterator(internal::skiplist_node_pin<T, TSize, skiplist> &&node) noexcept;
     public:
         iterator() noexcept;
-        iterator(const iterator &iterator) noexcept;
+        iterator(const iterator &other) noexcept;
         ~iterator() noexcept;
 
         iterator &operator++() noexcept;
@@ -250,60 +509,53 @@ public:
 #define yield_and_continue() std::this_thread::yield(); continue
 
 template<typename T, int TSize, typename TLess>
-skiplist<T, TSize, TLess>::iterator::iterator(skiplist *parent, internal::skiplist_node<T, TSize> *node) noexcept :
-        parent_(parent)
-{
-    while (node)
-    {
-        if (node->reference())
-            break;
-
-        node = node->next_valid(0);
-    }
-
-    node_ = node;
-}
+skiplist<T, TSize, TLess>::iterator::iterator(internal::skiplist_node_pin<T, TSize, skiplist> &&node) noexcept :
+        node_(std::move(node))
+{ }
 
 template<typename T, int TSize, typename TLess>
-skiplist<T, TSize, TLess>::iterator::iterator() noexcept :
-        node_(nullptr)
+skiplist<T, TSize, TLess>::iterator::iterator() noexcept
 { }
 
 template<typename T, int TSize, typename TLess>
 skiplist<T, TSize, TLess>::iterator::iterator(const iterator &other) noexcept :
-        node_(other.node_),
-        parent_(other.parent_)
+    node_(other.node_)
 {
-    if (node_)
-        node_->reference();
-}
+};
 
 template<typename T, int TSize, typename TLess>
 skiplist<T, TSize, TLess>::iterator::~iterator() noexcept
 {
-    if (node_)
-        node_->dereference(*parent_);
 }
 
 template<typename T, int TSize, typename TLess>
 typename skiplist<T, TSize, TLess>::iterator &skiplist<T, TSize, TLess>::iterator::operator++() noexcept
 {
-    auto node = node_;
-    auto pnode = node;
-
     while (true)
     {
-        node = node ? node->next_valid(0) : nullptr;
-        if (!node || node->reference())
+        if (!node_)
+            return *this;
+
+        auto nextptr = node_->next_valid(0);
+        if (!nextptr)
         {
-            if (pnode)
-                pnode->dereference(*parent_);
-            node_ = node;
+            node_ = std::move(pin());
+            return *this;
+        }
+
+        auto nn = internal::pin_node(nextptr, node_.allocator());
+        if (nn)
+        {
+            node_ = std::move(nn);
+            return *this;
+        }
+
+        if (node_->is_marked())
+        {
+            node_ = std::move(pin());
             return *this;
         }
     }
-
-    return *this;
 }
 
 template<typename T, int TSize, typename TLess>
@@ -335,16 +587,7 @@ const T &skiplist<T, TSize, TLess>::iterator::operator*() const noexcept
 template<typename T, int TSize, typename TLess>
 typename skiplist<T, TSize, TLess>::iterator &skiplist<T, TSize, TLess>::iterator::operator=(const iterator &other) noexcept
 {
-    auto pnode = node_;
     node_ = other.node_;
-    if (pnode == node_)
-        return *this;
-
-    if (node_)
-        node_->reference();
-    if (pnode)
-        pnode->dereference(*parent_);
-
     return *this;
 }
 
@@ -385,19 +628,14 @@ bool skiplist<T, TSize, TLess>::erase(const iterator &value) noexcept
     if (value == end())
         return false;
 
-    auto rmnode = value.node_;
+    auto &rmnode = value.node_;
 
     // first mark the node as being deleted
     if (!rmnode->mark_for_deletion())
         return false;
 
-    // the iterator should do this - but we take a const iterator reference
-    // so let's just be safe
-    if (!rmnode->reference())
-        return false;
-
     // now go through and remove it from the top level down to the bottom
-    node *cbefore = nullptr;
+    pin cbefore;
     for (int i = width - 1; i >= 0; i--)
     {
         while (true)
@@ -415,8 +653,6 @@ bool skiplist<T, TSize, TLess>::erase(const iterator &value) noexcept
         }
     }
 
-    // it's safe to free now
-    rmnode->dereference(*this);
     return true;
 }
 
@@ -425,31 +661,54 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
 {
     std::uniform_int_distribution<int> generator(0, width-1);
     int level = generator(random_);
-    std::array<std::pair<node *, node *>, width> locations;
+    std::array<std::pair<pin, pin>, width> locations;
 
     // 1. root level insert logic
     //    here, the node either becomes the new head or gets
     //    inserted into the appropriate location in all of its
     //    levels
     // find the insert locations
-    auto insert_node = make_node(value, level);
+    auto insnode = make_node(value, level);
+    auto insert_node = std::move(internal::pin_node(insnode, *this));
 
-    // make sure the node isn't deleted before insert finishes
-    insert_node->reference();
+    auto get_head = [this]() {
+        while (true)
+        {
+            auto headptr = head_.load();
+            if (!headptr)
+                return std::move(pin());
 
-    auto head = head_.load();
+            auto hptr = std::move(internal::pin_node(headptr, *this));
+            if (hptr)
+                return std::move(hptr);
+        }
+    };
+    auto head = std::move(get_head());
+
     while (true)
     {
         if (!head)
         {
             // special case - the list is empty
-            if (head_.compare_exchange_strong(head, insert_node))
+            node *current_head = nullptr;
+            for (int i = 1; i < width; i++)
+                insert_node->reference();
+
+            if (head_.compare_exchange_strong(current_head, insert_node.get()))
             {
                 // 1a. we just set the new head.
                 //      There is no additional housekeeping necessary
-                insert_node->dereference(*this);
                 return true;
             }
+
+            // doh! that didn't work
+            for (int i = 1; i < width; i++)
+                insert_node->dereference(*this);
+
+            assert(insert_node->refcnt() == 2);
+            head = std::move(internal::pin_node(current_head, *this));
+            if (!head)
+                head = std::move(get_head());
 
             yield_and_continue();
         }
@@ -462,8 +721,7 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
         //    which we already established as not being less than the value
         if (locations[0].second && !cmp_(value, locations[0].second->value()) && !locations[0].second->is_marked())
         {
-            // free the node - the basic dereference + the 1 we added to ensure it lives through this function
-            insert_node->dereference(*this);
+            // free the node - we dereference it because it's never added to the list
             insert_node->dereference(*this);
             return false;
         }
@@ -476,14 +734,19 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
             // that will ensure that if any nodes get inserted after the head
             // while we're operating, we'll catch them. But this means
             // we'll need to go back and clean those up later
-            int i = 0;
-            for (; i < width; i++)
+            // point the nexts to the current head and add the references
+
+            // for the node to be head
+            insert_node->set_next(0, head.get());
+            for (int i = 1; i < width; i++)
             {
-                if (!insert_node->set_next(i, head) || head->is_marked())
-                    break;
+                insert_node->set_next(i, head.get());
+                insert_node->reference();
             }
 
-            if (head_.compare_exchange_strong(head, insert_node))
+            node *current_head = head.get();
+            assert(insert_node->refcnt() >= width);
+            if (head_.compare_exchange_strong(current_head, insert_node.get()))
             {
                 // we have to finish the takeover as the head
                 // this will keep the state of the list valid
@@ -492,57 +755,44 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
                 takeover_head(insert_node, head);
 
                 // let the insert node get deleted
-                insert_node->dereference(*this);
                 return true;
             }
 
+            // we failed to make the node head, reset it's refcount to 1
+            for (int i = 1; i < width; i++)
+                insert_node->dereference(*this);
+
+            assert(insert_node->refcnt() == 2);
+            head = std::move(internal::pin_node(current_head, *this));
+            if (!head)
+                head = std::move(get_head());
+
             yield_and_continue();
         }
-
-        // we are inserting the node after first - so we'll take a reference to it to make sure
-        // it's not deleted while we're using it
-        if (!locations[0].first->reference())
-        {
-            head = head_.load();
-            yield_and_continue();
-        }
-
         if (locations[0].first->is_marked())
         {
             // ok - well the node got marked - let's try again
-            locations[0].first->dereference(*this);
-            head = head_;
+            head = std::move(get_head());
             yield_and_continue();
         }
 
         // 4. This is a standard insert. We'll stick the node
         //    where it belongs in level 0. Once we do that. We're good to
         //    set it's other levels and return true
-        if (locations[0].first->insert_next(0, locations[0].second, insert_node))
+        if (locations[0].first->insert_next(0, locations[0].second.get(), insert_node.get()))
         {
             // success!
             for (int i = 1; i <= level; i++)
                 finish_insert(i, insert_node, locations);
 
-            std::stringstream buf;
-            buf << "Inserted " << value << " between " << locations[0].first->value() << " (" << (locations[0].first->is_marked() ? "" : "not ") << "marked) and ";
-            if (locations[0].second)
-                buf << locations[0].second->value();
-            else
-                buf << "null";
-
             // let the node get deleted when it's time
-            insert_node->dereference(*this);
-
-            // now first is safe for removal
-            locations[0].first->dereference(*this);
+            // the reference count is already one from making the node.
+            // And it'll bump up with the finish_insert calls
             return true;
         }
 
         // now first is safe for removal until we pick it up again
-        locations[0].first->dereference(*this);
-
-        head = head_.load();
+        head = std::move(get_head());
         yield_and_continue();
     }
 }
@@ -550,10 +800,19 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
 template<typename T, int TSize, typename TLess>
 typename skiplist<T, TSize, TLess>::iterator skiplist<T, TSize, TLess>::begin() noexcept
 {
-    auto head = head_.load();
-    if (head->is_marked())
-        head = head->next_valid(0);
-    return iterator(this, head);
+    while (true)
+    {
+        auto head = head_.load();
+        if (head->is_marked())
+            head = head->next_valid(0);
+
+        if (!head)
+            return iterator();
+
+        auto pp = internal::pin_node<T, TSize, skiplist>(head, *this);
+        if (pp)
+            return iterator(std::move(pp));
+    }
 }
 
 template<typename T, int TSize, typename TLess>
@@ -565,21 +824,30 @@ typename skiplist<T, TSize, TLess>::iterator skiplist<T, TSize, TLess>::end() co
 template<typename T, int TSize, typename TLess>
 typename skiplist<T, TSize, TLess>::iterator skiplist<T, TSize, TLess>::find(const T &value) noexcept
 {
-    return iterator(this, find_location(0, value));
+    auto fndNode = find_location(0, value);
+    if (!fndNode)
+        return iterator();
+
+    return iterator(std::move(internal::pin_node(fndNode, *this)));
 }
 
 template<typename T, int TSize, typename TLess>
-std::pair<typename skiplist<T, TSize, TLess>::node *, typename skiplist<T, TSize, TLess>::node *>
-skiplist<T, TSize, TLess>::find_location(node *before, int level, const T &value) noexcept
+std::pair<internal::skiplist_node_pin<T, TSize, skiplist<T, TSize, TLess>>, internal::skiplist_node_pin<T, TSize, skiplist<T, TSize, TLess>>>
+skiplist<T, TSize, TLess>::find_location(pin &before, int level, const T &value) noexcept
 {
     auto head_pair = [this]() {
         auto head = head_.load();
-        if (head)
-            return std::make_pair(head, !head->is_marked());
-        return std::make_pair((node *)nullptr, false);
+        while (head)
+        {
+            auto hd = std::move(internal::pin_node(std::move(head), *this));
+            if (hd)
+                return std::move(std::make_pair(std::move(hd), !head->is_marked()));
+        }
+
+        return std::move(std::make_pair(pin(), false));
     };
 
-    auto after = before ? before->next(level) : head_pair();
+    auto after = before ? pin_next(level, before) : head_pair();
     while (after.first)
     {
         // if our next node is marked for deletion
@@ -588,18 +856,18 @@ skiplist<T, TSize, TLess>::find_location(node *before, int level, const T &value
         if (before && (after.first->is_marked() || after.first->level() < level))
         {
             remove_node_from_level(level, before, after.first);
-            after = before->next(level);
+            after = std::move(pin_next(level, before));
             continue;
         }
 
         if (!cmp_(after.first->value(), value))
             break;
 
-        before = after.first;
-        after = before->next(level);
+        before = std::move(after.first);
+        after = std::move(pin_next(level, before));
     }
 
-    return std::make_pair(before, after.first);
+    return std::move(std::make_pair(std::move(before), std::move(after.first)));
 }
 
 template<typename T, int TSize, typename TLess>
@@ -649,16 +917,15 @@ template<typename T, int TSize, typename TLess>
 void skiplist<T, TSize, TLess>::find_location(
         int level,
         const T &value,
-        std::array<std::pair<node *, node *>, width> &into) noexcept
+        std::array<std::pair<pin, pin>, width> &into) noexcept
 {
-    node *cbefore = nullptr;
+    pin cbefore;
     for (int i = width - 1; i >= level; i--)
     {
-        into[i] = find_location(cbefore, i, value);
-
+        into[i] = std::move(find_location(cbefore, i, value));
         if (!into[i].first)
         {
-            auto answer = into[i];
+            auto &answer = into[i];
             for (--i; i >= level; i--)
                 into[i] = answer;
             break;
@@ -694,7 +961,7 @@ internal::skiplist_node<T, TSize> *skiplist<T, TSize, TLess>::make_node(const T 
 }
 
 template<typename T, int TSize, typename TLess>
-void skiplist<T, TSize, TLess>::takeover_head(node *newhead, node *oldhead) noexcept
+void skiplist<T, TSize, TLess>::takeover_head(pin &newhead, pin &oldhead) noexcept
 {
     // In this phase, oldhead was the head and newhead is now the head
     // however, all of newhead's next's are pointing to oldhead.
@@ -706,68 +973,95 @@ void skiplist<T, TSize, TLess>::takeover_head(node *newhead, node *oldhead) noex
         // to be in a transitory invalid state. So we'll just keep trying to remove
         // head from the levels beyond where head should be
         remove_node_from_level(i, newhead, oldhead);
+        assert(oldhead->refcnt() > oldhead->level());
     }
 }
 
 template<typename T, int TSize, typename TLess>
-void skiplist<T, TSize, TLess>::remove_node_from_level(int level, node *prev_hint, node *remnode) noexcept
+void skiplist<T, TSize, TLess>::remove_node_from_level(int level, const pin &prev_hint, const pin &remnode) noexcept
 {
+    pin prev = prev_hint;
     while (true)
     {
         auto rmnode_nmatch = remnode;
-        while (!prev_hint->mark_next_deleted(level, rmnode_nmatch))
+        node *rmnode_node = rmnode_nmatch.get();
+
+        // step 1: resolve prev
+        while (!prev->mark_next_deleted(level, rmnode_node))
         {
+            // either prev_hint isn't pointing to rmnode_node, or
+            // someone else marked the node deleted
+            rmnode_nmatch = std::move(internal::pin_node(rmnode_node, *this));
             if (rmnode_nmatch == remnode)
             {
                 // the node has already been marked
-                // but it still hasn't been deleted.
-                // for the assist
+                // we'll go in for the assist and delete it
+                // but only one should remove the reference
+                // someone else deleted the node before us
                 break;
             }
-
-            if (!rmnode_nmatch || !cmp_(rmnode_nmatch->value(), remnode->value()))
+            else if (!rmnode_node || (rmnode_nmatch && !cmp_(rmnode_nmatch->value(), remnode->value())))
             {
                 // the node has already been removed
                 return;
             }
 
-            prev_hint = rmnode_nmatch;
+            if (rmnode_nmatch)
+                prev = rmnode_nmatch;
+
+            if (prev->next(level).first && prev->next(level).first->refcnt() == 0)
+            {
+                std::cout << "Node " << prev->next(level).first << ", value " << prev->next(level).first->value() << " was prematurely freed" << std::endl;
+                std::cout << "While getting next on level " << level << " for " << prev->value() << std::endl;
+                abort();
+            }
         }
 
-        // So we'll find our next node that we'll take over.
+        // So we'll find our next node that will take over.
         // We're going to leave it in remnode but mark the
         // next ptr as being deleted so it won't get replaced
         // the attempt to remove it will be fine. Removing
         // a node won't change the removing node's pointers
-        auto new_next = remnode->next(level);
-        while (new_next.first && new_next.first->is_marked())
+        auto new_next = std::move(pin_next(level, remnode));
+        while (new_next.first && (new_next.first->is_marked() || new_next.first->level() < level))
         {
             remove_node_from_level(level, remnode, new_next.first);
-            new_next = remnode->next(level);
+            new_next = std::move(pin_next(level, remnode));
         }
 
-        auto newnext = new_next.first;
+        auto newnext = new_next.first.get();
         if (!remnode->mark_next_deleted(level, newnext))
         {
             // ensure that the next is marked as deleted
             // to in-turn, ensure that no one else swaps another node
             // in here
-            if (newnext != new_next.first)
+            if (newnext != new_next.first.get())
             {
                 yield_and_continue();
             }
         }
 
         // first make sure we cmpxchg that node
-        if (!prev_hint->remove_next(level, remnode, new_next.first))
+        assert(remnode != new_next.first);
+        if (!prev->remove_next(level, remnode.get(), new_next.first.get()))
         {
+            // prev has a different next now. Start over
             yield_and_continue();
         }
 
-        // we removed the node - let's make sure that we clean up the node
-        // if this is the last level it's getting removed from
-        if (level == 0)
-            remnode->dereference(*this);
+        // we were the ones that removed the node from it's prev
+        // we should deref it
+        /* backtrace
+        std::stringstream str;
+        str << "Thread " << std::this_thread::get_id() << std::endl;
+        str << "dereference node " << remnode.get() << " value " << remnode->value() << " level " << level << " of " << remnode->level() << std::endl;
+        str << "Prev = " << prev.get() << " (" << prev->value() << ")" << std::endl;
+        str << "Replaced by " << (new_next.first ? new_next.first.get() : nullptr) << " (" << (new_next.first ? new_next.first->value() : -1) << ")" << std::endl;
+        node::print_backtrace(str);
+        std::cout << str.str() << std::endl << std::endl;
+        /* /backtrace */
+        // dereference the node for this level if it's truly gone
+        remnode->dereference(*this);
         return;
     }
 }
@@ -775,8 +1069,8 @@ void skiplist<T, TSize, TLess>::remove_node_from_level(int level, node *prev_hin
 template<typename T, int TSize, typename TLess>
 void skiplist<T, TSize, TLess>::finish_insert(
         int level,
-        node *insertnode,
-        std::array<std::pair<node *, node *>, width> &locations) noexcept
+        pin &insertnode,
+        std::array<std::pair<pin, pin>, width> &locations) noexcept
 {
     // in this function, insertnode has already
     // been inserted at level 0 - but it needs to be inserted
@@ -784,13 +1078,18 @@ void skiplist<T, TSize, TLess>::finish_insert(
     // which we'll do as long as the node isn't marked
     while (!insertnode->is_marked())
     {
-        if (locations[level].first && locations[level].first->insert_next(level, locations[level].second, insertnode))
+        insertnode->reference();
+        if (locations[level].first && locations[level].first->insert_next(level, locations[level].second.get(), insertnode.get()))
+        {
+            // reference the node for this level
             return;
+        }
+
+        insertnode->dereference(*this);
 
         // that failed. We need to rescan the locations for the level
         find_location(level, insertnode->value(), locations);
-
-        if (locations[level].first == nullptr)
+        if (!locations[level].first)
         {
             // all the possible predecessors for the node have been removed.
             // that means this one will have had to have been set up
@@ -804,7 +1103,7 @@ void skiplist<T, TSize, TLess>::deallocate(node *nd)
 {
     // TODO - this is called prematurely
     //        all local use of nodes needs to be pinned to prevent this
-    nd->init(0, -1);
+    //nd->init(0, -1);
     return;
     // we can drop this into the freelist
     auto flhead = freelist_head_.load();

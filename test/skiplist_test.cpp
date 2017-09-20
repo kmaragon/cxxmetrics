@@ -66,6 +66,31 @@ TEST(skiplist_test, insert_head)
     ASSERT_NE(list.find(8.9988), list.end());
 }
 
+TEST(skiplist_test, insert_head_and_remove)
+{
+    skiplist<double, 128> list;
+
+    ASSERT_TRUE(list.insert(8.9988));
+    ASSERT_TRUE(list.insert(15.6788));
+    ASSERT_TRUE(list.insert(8000));
+    ASSERT_TRUE(list.insert(1000.4050001));
+    ASSERT_TRUE(list.insert(5233.05));
+
+    ASSERT_TRUE(list.erase(8.9988));
+    ASSERT_TRUE(list.insert(9.1003));
+    ASSERT_TRUE(list.insert(6.7));
+    ASSERT_TRUE(list.insert(9000));
+
+    std::vector<double> values(list.begin(), list.end());
+    ASSERT_EQ(values.size(), 7);
+    ASSERT_DOUBLE_EQ(values[0], 6.7);
+    ASSERT_DOUBLE_EQ(values[1], 9.1003);
+    ASSERT_DOUBLE_EQ(values[2], 15.6788);
+    ASSERT_DOUBLE_EQ(values[3], 1000.4050001);
+    ASSERT_DOUBLE_EQ(values[4], 5233.05);
+    ASSERT_DOUBLE_EQ(values[5], 8000);
+    ASSERT_DOUBLE_EQ(values[6], 9000);
+}
 
 TEST(skiplist_test, insert_additional)
 {
@@ -177,7 +202,7 @@ TEST(skiplist_test, insert_threads_tail)
 TEST(skiplist_test, insert_threads_head)
 {
     skiplist<double, 1024> list;
-    atomic_uint_fast64_t at(999);
+    atomic_int_fast64_t at(999);
     vector<thread> workers;
 
     for (int i = 0; i < 16; i++)
@@ -186,7 +211,7 @@ TEST(skiplist_test, insert_threads_head)
             while (true)
             {
                 auto mult = at.fetch_add(-1);
-                if (mult >= 1000)
+                if (mult < 0)
                     return;
 
                 if (mult % 2)
@@ -207,9 +232,9 @@ TEST(skiplist_test, insert_threads_head)
         // assert on every 10th result
         if (!(x % 10))
         {
-            ASSERT_NE(list.find(0.17 * x), list.end());
+            ASSERT_NE(list.find(0.17 * x), list.end()) << "At " << x;
         }
-        ASSERT_DOUBLE_EQ(values[x], 0.17 * x);
+        ASSERT_DOUBLE_EQ(values[x], 0.17 * x) << "At " << x;
     }
 }
 
