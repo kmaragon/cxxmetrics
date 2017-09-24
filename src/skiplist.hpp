@@ -164,15 +164,6 @@ public:
         return res;
     }
 
-    skiplist_node *next_valid(int level) const noexcept
-    {
-        auto n = next(level);
-        while (n.first && n.first->is_marked())
-            n = n.first->next(level);
-
-        return n.first;
-    }
-
     bool mark_next_deleted(int level, skiplist_node *&if_matches) noexcept
     {
         if (ptr_is_marked(if_matches))
@@ -373,6 +364,23 @@ private:
     node *make_node(const T &value, int level);
     void deallocate(node *nd);
 
+    auto pin_next_valid(int level, const pin &node) const
+    {
+        pin next = node;
+        while (true)
+        {
+            // this only gets called in non-const contexts or iterators which are run from
+            // a const context but can only be created from a non-const skiplist, which means
+            // this will still be safe
+            next = std::move(const_cast<skiplist *>(this)->pin_next(level, next).first);
+            if (!next)
+                return next;
+
+            if (!next->is_marked())
+                return std::move(next);
+        }
+    }
+
     auto pin_next(int level, const pin &node)
     {
         while (true)
@@ -400,8 +408,9 @@ public:
     {
         friend class skiplist;
         internal::skiplist_node_pin<T, TSize, skiplist> node_;
+        skiplist *list_;
 
-        explicit iterator(internal::skiplist_node_pin<T, TSize, skiplist> &&node) noexcept;
+        explicit iterator(internal::skiplist_node_pin<T, TSize, skiplist> &&node, skiplist *list) noexcept;
     public:
         iterator() noexcept;
         iterator(const iterator &other) noexcept;
@@ -435,8 +444,9 @@ public:
 #define yield_and_continue() std::this_thread::yield(); continue
 
 template<typename T, int TSize, typename TLess>
-skiplist<T, TSize, TLess>::iterator::iterator(internal::skiplist_node_pin<T, TSize, skiplist> &&node) noexcept :
-        node_(std::move(node))
+skiplist<T, TSize, TLess>::iterator::iterator(internal::skiplist_node_pin<T, TSize, skiplist> &&node, skiplist *list) noexcept :
+        node_(std::move(node)),
+        list_(list)
 { }
 
 template<typename T, int TSize, typename TLess>
@@ -457,31 +467,11 @@ skiplist<T, TSize, TLess>::iterator::~iterator() noexcept
 template<typename T, int TSize, typename TLess>
 typename skiplist<T, TSize, TLess>::iterator &skiplist<T, TSize, TLess>::iterator::operator++() noexcept
 {
-    while (true)
-    {
-        if (!node_)
-            return *this;
+    if (!node_)
+        return *this;
 
-        auto nextptr = node_->next_valid(0);
-        if (!nextptr)
-        {
-            node_ = std::move(pin());
-            return *this;
-        }
-
-        auto nn = internal::pin_node(nextptr, node_.allocator());
-        if (nn)
-        {
-            node_ = std::move(nn);
-            return *this;
-        }
-
-        if (node_->is_marked())
-        {
-            node_ = std::move(pin());
-            return *this;
-        }
-    }
+    node_ = list_->pin_next_valid(0, node_);
+    return *this;
 }
 
 template<typename T, int TSize, typename TLess>
@@ -723,19 +713,26 @@ bool skiplist<T, TSize, TLess>::insert(const T &value) noexcept
 template<typename T, int TSize, typename TLess>
 typename skiplist<T, TSize, TLess>::iterator skiplist<T, TSize, TLess>::begin() noexcept
 {
+    pin head;
     while (true)
     {
-        auto head = head_.load();
-        if (head->is_marked())
-            head = head->next_valid(0);
-
-        if (!head)
+        auto hd = head_.load();
+        if (!hd)
             return iterator();
 
-        auto pp = internal::pin_node<T, TSize, skiplist>(head, *this);
-        if (pp)
-            return iterator(std::move(pp));
+        head = internal::pin_node(hd, *this);
+        if (!head)
+        {
+            yield_and_continue();
+        }
+
+        break;
     }
+
+    if (head && head->is_marked())
+        head = std::move(pin_next_valid(0, head));
+
+    return iterator(std::move(head), this);
 }
 
 template<typename T, int TSize, typename TLess>
@@ -751,7 +748,7 @@ typename skiplist<T, TSize, TLess>::iterator skiplist<T, TSize, TLess>::find(con
     if (!fndNode)
         return iterator();
 
-    return iterator(std::move(fndNode));
+    return iterator(std::move(fndNode), this);
 }
 
 template<typename T, int TSize, typename TLess>
@@ -792,7 +789,7 @@ skiplist<T, TSize, TLess>::find_location(pin &before, int level, const T &value)
                 }
                 remove_node_from_level(level, before, after.first);
                 after = std::move(pin_next(level, before));
-                continue;
+                yield_and_continue();
             }
         }
 
@@ -810,21 +807,7 @@ template<typename T, int TSize, typename TLess>
 std::pair<typename skiplist<T, TSize, TLess>::pin, typename skiplist<T, TSize, TLess>::pin>
 skiplist<T, TSize, TLess>::find_location(const pin &start, int level, const T &value) const noexcept
 {
-    auto pin_next_valid = [](const skiplist *lst, const pin &nd, int level)
-    {
-        while (true)
-        {
-            auto ptr = nd->next_valid(level);
-            if (!ptr)
-                return pin();
-
-            auto pinnd = std::move(internal::pin_node(ptr, *const_cast<skiplist *>(lst)));
-            if (pinnd)
-                return std::move(pinnd);
-        }
-    };
-
-    auto head_pair = [&pin_next_valid, level, this]() {
+    auto head_pair = [level, this]() {
         pin head; // lol get it?
         while (true)
         {
@@ -838,20 +821,20 @@ skiplist<T, TSize, TLess>::find_location(const pin &start, int level, const T &v
         }
 
         while (head && head->is_marked())
-            head = pin_next_valid(this, head, level);
+            head = pin_next_valid(level, head); // another pun, lolz
 
         return head;
     };
 
     auto before = start;
-    auto after = before ? pin_next_valid(this, before, level) : head_pair();
+    auto after = before ? pin_next_valid(level, before) : head_pair();
     while (after)
     {
         if (!cmp_(after->value(), value))
             break;
 
         before = after;
-        after = pin_next_valid(this, after, level);
+        after = pin_next_valid(level, after);
     }
 
     return std::make_pair(before, after);
@@ -995,6 +978,8 @@ void skiplist<T, TSize, TLess>::remove_node_from_level(int level, const pin &pre
         // our prev_node isn't pointing to our remnode anymore.
         // Something else would have been inserted in between
         prev = pin_next(level, prev).first;
+        if (!prev)
+            return;
         yield_and_continue();
     }
 
@@ -1036,10 +1021,8 @@ void skiplist<T, TSize, TLess>::finish_insert(
 template<typename T, int TSize, typename TLess>
 void skiplist<T, TSize, TLess>::deallocate(node *nd)
 {
-    // TODO - this is called prematurely
-    //        all local use of nodes needs to be pinned to prevent this
-    //nd->init(0, -1);
     return;
+
     // we can drop this into the freelist
     auto flhead = freelist_head_.load();
     while (true)

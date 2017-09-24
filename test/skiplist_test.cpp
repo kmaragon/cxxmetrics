@@ -12,47 +12,6 @@ using namespace cxxmetrics;
 using namespace cxxmetrics::internal;
 using namespace string_literals;
 
-TEST(skiplist_node_test, next_valid_and_delete)
-{
-    skiplist_node<string, 8> node;
-    skiplist_node<string, 8> after;
-    skiplist_node<string, 8> last;
-
-    node.init("Hello 1"s, 0);
-    after.init("Removing"s, 0);
-    last.init("Second"s, 0);
-
-    node.insert_next(0, nullptr, &after);
-    after.insert_next(0, nullptr, &last);
-
-    auto afterptr = &after;
-    ASSERT_TRUE(node.mark_next_deleted(0, afterptr));
-
-    ASSERT_FALSE(node.mark_next_deleted(-2, afterptr));
-    ASSERT_NE(afterptr, &after);
-
-    after.mark_for_deletion();
-    ASSERT_EQ(node.next_valid(0)->value(), "Second"s);
-
-    ASSERT_EQ(after.level(), 0);
-
-    ASSERT_FALSE(node.next(0).second);
-}
-
-TEST(skiplist_node_test, remove_node)
-{
-    skiplist_node<string, 8> node;
-    skiplist_node<string, 8> after;
-    skiplist_node<string, 8> last;
-
-    node.init("Hello 1"s, 0);
-    after.init("Removing"s, 0);
-    last.init("Second"s, 0);
-
-    node.insert_next(0, nullptr, &after);
-    after.insert_next(0, nullptr, &last);
-}
-
 TEST(skiplist_test, insert_head)
 {
     skiplist<double, 128> list;
