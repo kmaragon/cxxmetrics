@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.2)
-project(cxxmetrics)
+project(cxxmetrics C CXX)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 

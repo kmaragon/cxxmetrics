@@ -2,10 +2,17 @@
 #define CXXMETRICS_GAUGE_HPP
 
 #include "metric.hpp"
+#include <type_traits>
+
+#if __cplusplus < 201700L
+namespace std {
+	template<typename T>
+    using invoke_result = result_of<T>;
+}
+#endif
 
 namespace cxxmetrics
 {
-
 
 namespace gauges
 {
@@ -76,15 +83,8 @@ TGaugeType primitive_gauge<TGaugeType>::get() const noexcept
 template<typename TFn>
 struct functional_gauge_info
 {
-private:
-    static auto gtp()
-    {
-        TFn *f;
-        return (*f)();
-    }
-
 public:
-    using gauge_type = typename std::decay<decltype(functional_gauge_info<TFn>::gtp())>::type;
+    using gauge_type = typename std::decay<decltype(std::declval<TFn>()())>::type;
 };
 
 template<typename TFn>
@@ -209,12 +209,15 @@ public:
     gauge &operator=(gauge &&mv) noexcept = default;
 };
 
-template<typename TFn>
-class gauge<std::function<TFn()>> : public gauges::functional_gauge<std::function<TFn()>>, public metric<gauge<TFn()>>
+template<typename T>
+class gauge<std::function<T()>> : public gauges::functional_gauge<std::function<T()>>, public metric<gauge<std::function<T()>>>
 {
 public:
-    explicit gauge(const std::function<TFn()> &fn) noexcept :
-            gauges::functional_gauge<std::function<TFn()>>(fn)
+    explicit gauge(const std::function<T()> &fn) noexcept :
+            gauges::functional_gauge<std::function<T()>>(fn)
+    { }
+    explicit gauge(std::function<T()> &&fn) noexcept :
+            gauges::functional_gauge<std::function<T()>>(std::forward(fn))
     { }
     gauge(const gauge &copy) noexcept = default;
     gauge(gauge &&mv) noexcept = default;

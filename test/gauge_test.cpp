@@ -48,7 +48,7 @@ TEST(gauge_test, pointer_gauge_works)
 TEST(gauge_test, reference_gauge_works)
 {
     char v = 'A';
-    gauge<char &> g(v);
+    gauge<char &> g{v};
     ASSERT_FLOAT_EQ(g.get(), 'A');
 
     v = 'z';
