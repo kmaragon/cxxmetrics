@@ -47,7 +47,7 @@ TEST(ewma_test, calculates_fixed_rate)
 
 TEST(ewma_test, calculates_fixed_rate_threads)
 {
-    ewma e(10ms, 2ms);
+    ewma<double> e(10ms, 2ms);
 
     double rate;
     std::vector<std::thread> threads;
@@ -111,7 +111,7 @@ TEST(ewma_test, calculates_after_jump_in_window)
 
 TEST(ewma_test, produces_correct_type)
 {
-    ewma a(5s);
+    ewma<double> a(5s);
 
-    ASSERT_EQ(a.metric_type(), "cxxmetrics::ewma");
+    ASSERT_EQ(a.metric_type(), "cxxmetrics::ewma<double>");
 }

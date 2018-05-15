@@ -245,6 +245,7 @@ ewma<TClockGet, TValue> &ewma<TClockGet, TValue>::operator=(const ewma<TClockGet
     last_ = c.last_;
     return *this;
 }
+
 }
 
 /**
@@ -261,9 +262,10 @@ struct steady_clock_point
 /**
  * \brief An exponential weighted moving average metric
  */
-class ewma : public metric<ewma>
+template<typename TValue>
+class ewma : public metric<ewma<TValue>>
 {
-    internal::ewma<steady_clock_point> ewma_;
+    internal::ewma<steady_clock_point, TValue> ewma_;
 public:
     /**
      * \brief Construct an exponential weighted moving average
@@ -286,7 +288,8 @@ public:
      *
      * \param value the value to mark in the ewma
      */
-    virtual void mark(int64_t value) noexcept
+    template<typename TMark>
+    typename std::enable_if<std::is_arithmetic<TMark>::value, void>::type mark(TMark value) noexcept
     {
         ewma_.mark(value);
     }
@@ -296,7 +299,7 @@ public:
      *
      * \return the rate of the ewma
      */
-    double rate() const noexcept
+    TValue rate() const noexcept
     {
         return ewma_.rate();
     }
@@ -306,7 +309,7 @@ public:
      *
      * \return The rate of the ewma
      */
-    double rate() noexcept
+    TValue rate() noexcept
     {
         return ewma_.rate();
     }
@@ -317,14 +320,15 @@ public:
      * \param value the amount to mark
      * \return a reference to the ewma
      */
-    inline ewma &operator+=(int64_t value)
+    template<typename TMark>
+    typename std::enable_if<std::is_arithmetic<TMark>::value, ewma<TValue>>::type& operator+=(typename std::enable_if<std::is_arithmetic<TMark>::value, TMark>::type value) noexcept
     {
         mark(value);
         return *this;
     }
 
 protected:
-    bool compare_exchange(double expectedrate, double rate)
+    bool compare_exchange(TValue expectedrate, TValue rate)
     {
         return ewma_.compare_exchange(expectedrate, rate);
     }
