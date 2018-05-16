@@ -62,13 +62,12 @@ TEST(ewma_test, calculates_fixed_rate_threads)
                 std::this_thread::sleep_for(1ms);
             }
         });
-
-
     }
 
     for (auto &thr : threads)
         thr.join();
 
+    // note to reader: this is not a benchmark. This is just a sanity check for a 10ms windowed ewma
     std::cout << rate << " (" << (rate * 100) << " marks per second)" << std::endl;
     ASSERT_GE(rate, 5.0);
 }

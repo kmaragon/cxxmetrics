@@ -5,6 +5,8 @@
 #include <array>
 #include <random>
 
+#include "internal/hazard_ptr.hpp"
+
 namespace cxxmetrics
 {
 namespace internal

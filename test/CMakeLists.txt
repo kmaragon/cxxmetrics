@@ -3,6 +3,7 @@ include(Coverage)
 conan_include("conanfile.txt")
 
 set(SOURCES
+        internal/atomic_lifo_test.cpp
         counter_test.cpp
         ewma_test.cpp
         gauge_test.cpp

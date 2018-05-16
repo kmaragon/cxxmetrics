@@ -18,6 +18,7 @@ macro(target_sources_local target) # https://gitlab.kitware.com/cmake/cmake/issu
 endmacro()
 
 set(HEADERS
+		internal/atomic_lifo.hpp
         counter.hpp
         ewma.hpp
         gauge.hpp
