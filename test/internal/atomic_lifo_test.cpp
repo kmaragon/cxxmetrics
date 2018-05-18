@@ -88,6 +88,31 @@ TEST(atomic_lifo_test, custom_node_is_respected)
     ASSERT_EQ(current->value(), 5);
 }
 
+TEST(atomic_lifo_test, custom_node_can_be_recycled)
+{
+    atomic_lifo<test_node> p;
+    p.emplace(5);
+    p.emplace(7);
+    p.emplace(9);
+
+    auto current = p.pop();
+    ASSERT_EQ(current->value(), 9);
+    ASSERT_TRUE(current->had_next_set());
+
+    current = p.pop();
+    ASSERT_EQ(current->value(), 7);
+    ASSERT_TRUE(current->had_next_set());
+
+    p.push(std::move(current));
+    ASSERT_FALSE(current);
+    current = p.pop();
+    ASSERT_EQ(current->value(), 7);
+    ASSERT_TRUE(current->had_next_set());
+
+    current = p.pop();
+    ASSERT_EQ(current->value(), 5);
+}
+
 TEST(atomic_lifo_test, multithreaded_works)
 {
     atomic_lifo<int> p;

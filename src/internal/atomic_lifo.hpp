@@ -140,6 +140,12 @@ public:
     class pointer_type
     {
         std::unique_ptr<node, deallocator> ptr_;
+
+        node* get_node() {
+            return ptr_.get();
+        }
+
+        friend class atomic_lifo;
     public:
         pointer_type(const allocator_type& allocator = allocator_type()) :
                 ptr_(nullptr, { allocator })
@@ -178,6 +184,11 @@ public:
         value_type* operator->()
         {
             return &list_node_traits<node>::template value_of<value_type>(*ptr_);
+        }
+
+        node* release()
+        {
+            return ptr_.release();
         }
 
         operator bool() const {
@@ -227,19 +238,32 @@ public:
         return emplace(std::move(value));
 	}
 
-	template<typename... Args>
+	void push(pointer_type&& ptr)
+    {
+        auto h = head_.load();
+        while (true)
+        {
+            list_node_traits<node>::set_next_of(*ptr.get_node(), h);
+            if (head_.compare_exchange_weak(h, ptr.get_node()))
+                break;
+        }
+
+        ptr.release();
+    }
+
+    template<typename... Args>
+    pointer_type make_pointer(Args&&... args)
+    {
+        auto n = std::allocator_traits<allocator_type>::allocate(alloc_, 1);
+        std::allocator_traits<allocator_type>::construct(alloc_, n, std::forward<Args>(args)...);
+
+        return pointer_type(n, alloc_);
+    }
+
+    template<typename... Args>
 	void emplace(Args&&... args)
 	{
-		auto n = std::allocator_traits<allocator_type>::allocate(alloc_, 1);
-		std::allocator_traits<allocator_type>::construct(alloc_, n, std::forward<Args>(args)...);
-
-        auto h = head_.load();
-		while (true)
-		{
-			list_node_traits<node>::set_next_of(*n, h);
-			if (head_.compare_exchange_weak(h, n))
-			    break;
-		}
+		push(make_pointer(std::forward<Args>(args)...));
 	}
 
 	pointer_type pop()
@@ -258,6 +282,11 @@ public:
 
         return pointer_type(h, alloc_);
     }
+
+    auto get_allocator() const
+    {
+	    return alloc_;
+	}
 };
 
 }
