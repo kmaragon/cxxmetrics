@@ -38,7 +38,7 @@ set(HEADERS
 add_library(cxxmetrics INTERFACE)
 target_include_directories(cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_sources_local(cxxmetrics INTERFACE ${HEADERS})
-target_link_libraries(cxxmetrics INTERFACE CONAN_PKG::ctti)
+target_link_libraries(cxxmetrics INTERFACE atomic CONAN_PKG::ctti)
 
 install(FILES ${HEADERS} DESTINATION "include")
 
