@@ -101,18 +101,20 @@ public:
         constexpr auto q = ((long double)quantile(TQuantile))/100.0;
         static_assert(q >= 0 && q <= 1, "The provided quantile value is invalid. Must be between 0 and 1");
 
+        using result_type = decltype(values_[0] * q);
+
         if (count_ < 1)
-            return (long double)0;
+            return result_type{};
 
         auto pos = q * (count_ + 1);
-        int index = (int)pos;
+        auto index = static_cast<int>(pos);
 
         if (index < 1)
-            return (long double)min();
+            return result_type(min());
         if (index >= count_)
-            return (long double)max();
+            return result_type(max());
 
-        return values_[index - 1] + (pos - index) * (values_[index] - values_[index - 1]);
+        return result_type(values_[index - 1]) + (pos - index) * result_type(values_[index] - values_[index - 1]);
     }
 
     /**
@@ -122,10 +124,10 @@ public:
      */
     auto mean() const noexcept
     {
+        TElem total{};
         if (count_ < 1)
-            return (long double)0;
+            return decltype(total / 1.0l){};
 
-        TElem total = 0;
         for (int i = 0; i < count_; i++)
             total += values_[i];
 
@@ -139,7 +141,7 @@ public:
      */
     inline TElem min() const noexcept
     {
-        return count_ < 1 ? 0 : values_[0];
+        return count_ < 1 ? TElem{} : values_[0];
     }
 
     /**
@@ -149,7 +151,7 @@ public:
      */
     inline TElem max() const noexcept
     {
-        return count_ < 1 ? 0 : values_[count_-1];
+        return count_ < 1 ? TElem{} : values_[count_-1];
     }
 };
 

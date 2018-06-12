@@ -351,7 +351,7 @@ public:
     template<period::value TAt>
     constexpr meter_rate rate() const noexcept
     {
-        return impl_.template get_rate<TAt>();
+        return { period(TAt), impl_.template get_rate<TAt>() };
     }
 };
 
@@ -471,7 +471,7 @@ public:
      *
      * \param by the value to mark the meter by
      */
-    inline void mark(int64_t by)
+    inline void mark(int64_t by = 1)
     {
         base::mark(by);
     }
@@ -540,7 +540,7 @@ public:
      *
      * \param by the value to mark the meter by
      */
-    inline void mark(int64_t by)
+    inline void mark(int64_t by = 1)
     {
         base::mark(by);
     }
