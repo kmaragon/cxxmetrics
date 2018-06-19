@@ -25,7 +25,7 @@ class timer : public metric<timer<TClock, TReservoir, TWithMean, TWindows...>>
 public:
     using duration = typename TClock::duration;
     using time_point = typename TClock::time_point;
-    using clock = TClock;
+    using clock_type = TClock;
 
     timer() = default;
 
@@ -129,7 +129,7 @@ public:
      *
      * \return the underlying clock instance
      */
-    const TClock& clock() const noexcept
+    const clock_type& clock() const noexcept
     {
         return clock_;
     }
@@ -170,7 +170,7 @@ public:
      *
      * \param timer the timer to log to when going out of scope
      */
-    scoped_timer(Timer& timer) :
+    scoped_timer(TTimer& timer) :
             timer_(timer),
             start_(timer.clock().now())
     { }
@@ -202,12 +202,12 @@ public:
      */
     void reset()
     {
-        start_ = timer.clock().now();
+        start_ = timer_.clock().now();
     }
 };
 
 template<typename TClock, typename TReservoir, bool TWithMean, period::value... TWindows>
-template<typename TRunnable, bool TIncludeExceptions = false>
+template<typename TRunnable, bool TIncludeExceptions>
 typename std::invoke_result<TRunnable>::type timer<TClock, TReservoir, TWithMean, TWindows...>::time(const TRunnable &runnable)
 {
     scoped_timer<timer<TClock, TReservoir, TWithMean, TWindows...>> tm(*this);
