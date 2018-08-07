@@ -2,6 +2,7 @@
 #define CXXMETRICS_COUNTER_HPP
 
 #include "metric.hpp"
+#include "snapshots.hpp"
 #include <atomic>
 
 namespace cxxmetrics
@@ -36,7 +37,7 @@ public:
      */
     counter(counter &&c) noexcept;
 
-    virtual ~counter() = default;
+    ~counter() = default;
 
     counter &operator=(const counter &c) noexcept;
     counter &operator=(counter &&c) noexcept;
@@ -56,7 +57,7 @@ public:
      *
      * \return the value of the counter after the increment
      */
-    virtual TCount incr(TCount by) noexcept;
+    TCount incr(TCount by) noexcept;
 
     /**
      * \brief Get the current value of the counter
@@ -68,7 +69,7 @@ public:
     /**
      * \brief Convenience cast operator
      */
-    inline operator TCount() const
+    operator TCount() const
     {
         return value();
     }
@@ -78,10 +79,20 @@ public:
      *
      * \return a reference to the counter
      */
-    inline counter &operator++()
+    counter &operator++()
     {
         incr(1);
         return *this;
+    }
+
+    /**
+     * \brief Convenience operator to increment the counter by 1 in postfix
+     *
+     * \return a reference to the counter
+     */
+    TCount operator++(int)
+    {
+        return incr(1) - 1;
     }
 
     /**
@@ -91,7 +102,7 @@ public:
      *
      * \return a reference to the counter
      */
-    inline counter &operator+=(TCount by)
+    counter &operator+=(TCount by)
     {
         incr(by);
         return *this;
@@ -102,7 +113,7 @@ public:
      *
      * \return a reference to the counter
      */
-    inline counter &operator--()
+    counter &operator--()
     {
         incr(-1);
         return *this;
@@ -115,10 +126,17 @@ public:
      *
      * \return a reference to the counter
      */
-    inline counter &operator-=(TCount by)
+    counter &operator-=(TCount by)
     {
         incr(-by);
         return *this;
+    }
+
+    /**
+     * \brief Get a snapshot of the value as it is
+     */
+    cumulative_value_snapshot snapshot() const {
+        return cumulative_value_snapshot(value());
     }
 };
 

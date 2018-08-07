@@ -1,56 +1,62 @@
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include <gauge.hpp>
 
 using namespace std;
 using namespace cxxmetrics;
 
-TEST(gauge_test, primitive_gauge_works)
+TEST_CASE("Primitive Gauge works", "[gauge]")
 {
     gauge<std::string> g("hola");
-    ASSERT_EQ(g.get(), "hola");
+    REQUIRE(g.get() == "hola");
 
     g.set("hello");
-    ASSERT_EQ(g.get(), "hello");
+    REQUIRE(g.get() == "hello");
+    REQUIRE(g.snapshot() == "hello");
 
     gauge<int> h;
-    ASSERT_EQ((h = 20).get(), 20);
+    REQUIRE((h = 20).get() == 20);
 
     h.set(50);
-    ASSERT_EQ(h.get(), 50);
+    REQUIRE(h.get() == 50);
+    REQUIRE(h.snapshot() == 50);
 }
 
-TEST(gauge_test, functional_gauge_works)
+TEST_CASE("Functional Gauge works", "[gauge]")
 {
     double value = 99.810;
     std::function<double()> fn = [&value]() { return value; };
 
     gauge<decltype(fn)> g(fn);
-    ASSERT_DOUBLE_EQ(g.get(), 99.81);
+    REQUIRE(g.get() == 99.81);
 
     value = 10000;
-    ASSERT_DOUBLE_EQ(g.get(), 10000);
+    REQUIRE_THAT(g.get(), Catch::WithinULP(10000.0, 1));
+    REQUIRE_THAT(g.snapshot().value(), Catch::WithinULP(10000.0, 1));
 }
 
-TEST(gauge_test, pointer_gauge_works)
+TEST_CASE("Pointer Gauge works", "[gauge]")
 {
     float v = 70.0f;
     gauge<float *> g(&v);
-    ASSERT_FLOAT_EQ(g.get(), 70);
+    REQUIRE(g.get() == 70);
 
     v = 500.017f;
-    ASSERT_FLOAT_EQ(g.get(), 500.017);
+    REQUIRE_THAT(g.get(), Catch::WithinULP(500.017f, 1));
+    REQUIRE_THAT(g.snapshot().value(), Catch::WithinULP(500.017f, 1));
 
     float x = 0;
     gauge<float *> h(&x);
-    ASSERT_FLOAT_EQ((g = h).get(), 0);
+    REQUIRE((g = h).get() == 0.0);
+    REQUIRE(g.snapshot() == 0.0);
 }
 
-TEST(gauge_test, reference_gauge_works)
+TEST_CASE("Reference Gauge works", "[gauge]")
 {
     char v = 'A';
     gauge<char &> g{v};
-    ASSERT_FLOAT_EQ(g.get(), 'A');
+    REQUIRE(g.get() == 'A');
 
     v = 'z';
-    ASSERT_FLOAT_EQ(g.get(), 'z');
+    REQUIRE(g.get() == 'z');
+    REQUIRE(g.snapshot() == 'z');
 }

@@ -33,14 +33,19 @@ public:
 
 };
 
-constexpr quantile operator""_p(long double value)
+namespace literals
+{
+
+constexpr quantile operator ""_p(long double value)
 {
     return quantile(value);
 }
 
-constexpr quantile operator""_p(long long unsigned int value)
+constexpr quantile operator ""_p(long long unsigned int value)
 {
-    return quantile((long double)value);
+    return quantile((long double) value);
+}
+
 }
 
 namespace reservoirs

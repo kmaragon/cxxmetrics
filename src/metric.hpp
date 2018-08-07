@@ -20,7 +20,7 @@ public:
  * \brief Base class for a metric
  */
 template<typename TMetricType>
-class metric : public virtual internal::metric
+class metric : public internal::metric
 {
 protected:
     metric() = default;
@@ -31,7 +31,7 @@ public:
      *
      * \return the compile time type name of the metric
      */
-    static constexpr ctti::detail::cstring &type_name()
+    static constexpr ctti::detail::cstring type_name()
     {
         return ctti::type_id<TMetricType>().name();
     }

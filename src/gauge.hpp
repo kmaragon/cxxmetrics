@@ -2,6 +2,7 @@
 #define CXXMETRICS_GAUGE_HPP
 
 #include "metric.hpp"
+#include "snapshots.hpp"
 #include <type_traits>
 
 #if __cplusplus < 201700L
@@ -17,21 +18,33 @@ namespace cxxmetrics
 namespace gauges
 {
 
+enum gauge_aggregation_type
+{
+    aggregation_sum,
+    aggregation_average
+};
+
 /**
  * \brief The generic type for a gauge
  *
  * \tparam TGaugeValueType The type of data that the gauge produces
  */
-template<typename TGaugeValueType>
+template<typename TGaugeValueType, gauge_aggregation_type TAggregation = aggregation_average>
 class gauge
 {
 public:
+    using snapshot_type = typename std::conditional<TAggregation == aggregation_sum, cumulative_value_snapshot, average_value_snapshot>::type;
+
     virtual TGaugeValueType get() noexcept = 0;
     virtual TGaugeValueType get() const noexcept = 0;
+    snapshot_type make_snapshot() const noexcept
+    {
+        return snapshot_type(this->get());
+    }
 };
 
-template<typename TGaugeType>
-class primitive_gauge : gauge<TGaugeType>
+template<typename TGaugeType, gauge_aggregation_type TAggregation = aggregation_average>
+class primitive_gauge : gauge<TGaugeType, TAggregation>
 {
     TGaugeType value_;
 public:
@@ -48,34 +61,36 @@ public:
 
     TGaugeType get() noexcept override;
     TGaugeType get() const noexcept override;
+
+    auto snapshot() const noexcept { return this->make_snapshot(); }
 };
 
-template<typename TGaugeType>
-primitive_gauge<TGaugeType>::primitive_gauge(const TGaugeType &initial_value) noexcept :
+template<typename TGaugeType, gauge_aggregation_type TAggregation>
+primitive_gauge<TGaugeType, TAggregation>::primitive_gauge(const TGaugeType &initial_value) noexcept :
     value_(initial_value)
 { }
 
-template<typename TGaugeType>
-primitive_gauge<TGaugeType> &primitive_gauge<TGaugeType>::operator=(const TGaugeType &value) noexcept
+template<typename TGaugeType, gauge_aggregation_type TAggregation>
+primitive_gauge<TGaugeType, TAggregation> &primitive_gauge<TGaugeType, TAggregation>::operator=(const TGaugeType &value) noexcept
 {
     value_ = value;
     return *this;
 }
 
-template<typename TGaugeType>
-void primitive_gauge<TGaugeType>::set(TGaugeType value) noexcept
+template<typename TGaugeType, gauge_aggregation_type TAggregation>
+void primitive_gauge<TGaugeType, TAggregation>::set(TGaugeType value) noexcept
 {
     value_ = value;
 }
 
-template<typename TGaugeType>
-TGaugeType primitive_gauge<TGaugeType>::get() noexcept
+template<typename TGaugeType, gauge_aggregation_type TAggregation>
+TGaugeType primitive_gauge<TGaugeType, TAggregation>::get() noexcept
 {
     return value_;
 }
 
-template<typename TGaugeType>
-TGaugeType primitive_gauge<TGaugeType>::get() const noexcept
+template<typename TGaugeType, gauge_aggregation_type TAggregation>
+TGaugeType primitive_gauge<TGaugeType, TAggregation>::get() const noexcept
 {
     return value_;
 }
@@ -87,8 +102,8 @@ public:
     using gauge_type = typename std::decay<decltype(std::declval<TFn>()())>::type;
 };
 
-template<typename TFn>
-class functional_gauge : public gauge<typename functional_gauge_info<TFn>::gauge_type>
+template<typename TFn, gauge_aggregation_type TAggregation = aggregation_average>
+class functional_gauge : public gauge<typename functional_gauge_info<TFn>::gauge_type, TAggregation>
 {
     TFn fn_;
 public:
@@ -105,26 +120,28 @@ public:
 
     gauge_type get() noexcept override;
     gauge_type get() const noexcept override;
+
+    value_snapshot snapshot() const noexcept { return this->make_snapshot(); }
 };
 
-template<typename TFn>
-functional_gauge<TFn>::functional_gauge(const TFn &fn) noexcept :
+template<typename TFn, gauge_aggregation_type TAggregation>
+functional_gauge<TFn, TAggregation>::functional_gauge(const TFn &fn) noexcept :
     fn_(fn)
 { }
 
-template<typename TFn>
-typename functional_gauge<TFn>::gauge_type functional_gauge<TFn>::get() noexcept
+template<typename TFn, gauge_aggregation_type TAggregation>
+typename functional_gauge<TFn, TAggregation>::gauge_type functional_gauge<TFn, TAggregation>::get() noexcept
 {
     return fn_();
 }
 
-template<typename TFn>
-typename functional_gauge<TFn>::gauge_type functional_gauge<TFn>::get() const noexcept
+template<typename TFn, gauge_aggregation_type TAggregation>
+typename functional_gauge<TFn, TAggregation>::gauge_type functional_gauge<TFn, TAggregation>::get() const noexcept
 {
     return fn_();
 }
 
-template<typename TRefType>
+template<typename TRefType, gauge_aggregation_type TAggregation = aggregation_average>
 class referential_gauge : public gauge<TRefType>
 {
     std::reference_wrapper<TRefType> value_;
@@ -137,33 +154,35 @@ public:
 
     TRefType get() noexcept override;
     TRefType get() const noexcept override;
+
+    auto snapshot() const noexcept { return this->make_snapshot(); }
 };
 
-template<typename TRefType>
-referential_gauge<TRefType>::referential_gauge(TRefType &t) noexcept :
+template<typename TRefType, gauge_aggregation_type TAggregation>
+referential_gauge<TRefType, TAggregation>::referential_gauge(TRefType &t) noexcept :
     value_(t)
 { }
 
-template<typename TRefType>
-referential_gauge<TRefType>::referential_gauge(const referential_gauge &other) noexcept :
+template<typename TRefType, gauge_aggregation_type TAggregation>
+referential_gauge<TRefType, TAggregation>::referential_gauge(const referential_gauge &other) noexcept :
         value_(other.value_.get())
 { }
 
-template<typename TRefType>
-referential_gauge<TRefType> &referential_gauge<TRefType>::operator=(const referential_gauge &copy) noexcept
+template<typename TRefType, gauge_aggregation_type TAggregation>
+referential_gauge<TRefType, TAggregation> &referential_gauge<TRefType, TAggregation>::operator=(const referential_gauge &copy) noexcept
 {
     value_ = copy.value_.get();
     return *this;
 }
 
-template<typename TRefType>
-TRefType referential_gauge<TRefType>::get() noexcept
+template<typename TRefType, gauge_aggregation_type TAggregation>
+TRefType referential_gauge<TRefType, TAggregation>::get() noexcept
 {
     return value_.get();
 }
 
-template<typename TRefType>
-TRefType referential_gauge<TRefType>::get() const noexcept
+template<typename TRefType, gauge_aggregation_type TAggregation>
+TRefType referential_gauge<TRefType, TAggregation>::get() const noexcept
 {
     return value_.get();
 }
@@ -188,8 +207,8 @@ TRefType referential_gauge<TRefType>::get() const noexcept
  *
  * \tparam TGaugeType The type of data for the gauge
  */
-template<typename TGaugeType>
-class gauge : public gauges::primitive_gauge<TGaugeType>, public metric<gauge<TGaugeType>>
+template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation = gauges::aggregation_average>
+class gauge : public gauges::primitive_gauge<TGaugeType, TAggregation>, public metric<gauge<TGaugeType>>
 {
 public:
     explicit gauge(const TGaugeType &value = TGaugeType()) noexcept :
@@ -200,7 +219,7 @@ public:
 
     ~gauge() = default;
 
-    inline gauge &operator=(const TGaugeType &value) noexcept
+    gauge &operator=(const TGaugeType &value) noexcept
     {
         gauges::primitive_gauge<TGaugeType>::operator=(value);
         return *this;
@@ -209,8 +228,8 @@ public:
     gauge &operator=(gauge &&mv) noexcept = default;
 };
 
-template<typename T>
-class gauge<std::function<T()>> : public gauges::functional_gauge<std::function<T()>>, public metric<gauge<std::function<T()>>>
+template<typename T, gauges::gauge_aggregation_type TAggregation>
+class gauge<std::function<T()>, TAggregation> : public gauges::functional_gauge<std::function<T()>>, public metric<gauge<std::function<T()>>>
 {
 public:
     explicit gauge(const std::function<T()> &fn) noexcept :
@@ -227,8 +246,8 @@ public:
     gauge &operator=(gauge &&mv) noexcept = default;
 };
 
-template<typename TGaugeType>
-class gauge<TGaugeType *> : public gauges::referential_gauge<TGaugeType>, public metric<gauge<TGaugeType &>>
+template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
+class gauge<TGaugeType *, TAggregation> : public gauges::referential_gauge<TGaugeType>, public metric<gauge<TGaugeType &>>
 {
 public:
     inline explicit gauge(TGaugeType *ptr) noexcept :
@@ -240,8 +259,8 @@ public:
     gauge &operator=(const gauge &other) noexcept = default;
 };
 
-template<typename TGaugeType>
-class gauge<TGaugeType &> : public gauges::referential_gauge<TGaugeType>, public metric<gauge<TGaugeType &>>
+template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
+class gauge<TGaugeType &, TAggregation> : public gauges::referential_gauge<TGaugeType>, public metric<gauge<TGaugeType &>>
 {
 public:
     inline explicit gauge(TGaugeType &ref) noexcept :

@@ -6,6 +6,7 @@
 
 using namespace std;
 using namespace cxxmetrics;
+using namespace cxxmetrics::literals;
 
 TEST(reservoir_test, uniform_reservoir_on_exact_count)
 {

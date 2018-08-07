@@ -1,5 +1,6 @@
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include <internal/atomic_lifo.hpp>
+#include <set>
 #include <thread>
 
 using namespace cxxmetrics::internal;
@@ -47,29 +48,29 @@ struct test_node {
     }
 };
 
-TEST(atomic_lifo_test, can_push_and_pop)
+TEST_CASE("Atomic Lifo can push and pop", "[atomic_lifo]")
 {
     atomic_lifo<int> p;
     p.emplace(5);
     p.push(7);
     p.push(9);
 
-    ASSERT_EQ(*p.pop(), 9);
-    ASSERT_EQ(*p.pop(), 7);
-    ASSERT_EQ(*p.pop(), 5);
+    REQUIRE(*p.pop() == 9);
+    REQUIRE(*p.pop() == 7);
+    REQUIRE(*p.pop() == 5);
 }
 
-TEST(atomic_lifo_test, initializer_list_construction)
+TEST_CASE("Atomic Lifo initializer list construction", "[atomic_lifo]")
 {
     atomic_lifo<long> p = {45L, 9000L, 81000L, 9900000L};
 
-    ASSERT_EQ(*p.pop(), 45L);
-    ASSERT_EQ(*p.pop(), 9000L);
-    ASSERT_EQ(*p.pop(), 81000L);
-    ASSERT_EQ(*p.pop(), 9900000L);
+    REQUIRE(*p.pop() == 45L);
+    REQUIRE(*p.pop() == 9000L);
+    REQUIRE(*p.pop() == 81000L);
+    REQUIRE(*p.pop() == 9900000L);
 }
 
-TEST(atomic_lifo_test, custom_node_is_respected)
+TEST_CASE("Atomic Lifo custom node is respected", "[atomic_lifo]")
 {
     atomic_lifo<test_node> p;
     p.emplace(5);
@@ -77,18 +78,18 @@ TEST(atomic_lifo_test, custom_node_is_respected)
     p.emplace(9);
 
     auto current = p.pop();
-    ASSERT_EQ(current->value(), 9);
-    ASSERT_TRUE(current->had_next_set());
+    REQUIRE(current->value() == 9);
+    REQUIRE(current->had_next_set());
 
     current = p.pop();
-    ASSERT_EQ(current->value(), 7);
-    ASSERT_TRUE(current->had_next_set());
+    REQUIRE(current->value() == 7);
+    REQUIRE(current->had_next_set());
 
     current = p.pop();
-    ASSERT_EQ(current->value(), 5);
+    REQUIRE(current->value() == 5);
 }
 
-TEST(atomic_lifo_test, custom_node_can_be_recycled)
+TEST_CASE("Atomic Lifo custom node can be recycled", "[atomic_lifo]")
 {
     atomic_lifo<test_node> p;
     p.emplace(5);
@@ -96,24 +97,24 @@ TEST(atomic_lifo_test, custom_node_can_be_recycled)
     p.emplace(9);
 
     auto current = p.pop();
-    ASSERT_EQ(current->value(), 9);
-    ASSERT_TRUE(current->had_next_set());
+    REQUIRE(current->value() == 9);
+    REQUIRE(current->had_next_set());
 
     current = p.pop();
-    ASSERT_EQ(current->value(), 7);
-    ASSERT_TRUE(current->had_next_set());
+    REQUIRE(current->value() == 7);
+    REQUIRE(current->had_next_set());
 
     p.push(std::move(current));
-    ASSERT_FALSE(current);
+    REQUIRE(!current);
     current = p.pop();
-    ASSERT_EQ(current->value(), 7);
-    ASSERT_TRUE(current->had_next_set());
+    REQUIRE(current->value() == 7);
+    REQUIRE(current->had_next_set());
 
     current = p.pop();
-    ASSERT_EQ(current->value(), 5);
+    REQUIRE(current->value() == 5);
 }
 
-TEST(atomic_lifo_test, multithreaded_works)
+TEST_CASE("Atomic Lifo multithreaded works", "[atomic_lifo]")
 {
     atomic_lifo<int> p;
 
@@ -140,14 +141,14 @@ TEST(atomic_lifo_test, multithreaded_works)
     int expected = 0;
     for (auto value : results)
     {
-        ASSERT_EQ(value, expected);
+        REQUIRE(value == expected);
         expected++;
     }
 
-    ASSERT_EQ(expected, 1600);
+    REQUIRE(expected == 1600);
 }
 
-TEST(atomic_lifo_test, multithreaded_works_with_custom_node)
+TEST_CASE("Atomic Lifo multithreaded works with custom node", "[atomic_lifo]")
 {
     atomic_lifo<test_node> p;
 
@@ -174,9 +175,9 @@ TEST(atomic_lifo_test, multithreaded_works_with_custom_node)
     int expected = 0;
     for (auto value : results)
     {
-        ASSERT_EQ(value, expected);
+        REQUIRE(value == expected);
         expected++;
     }
 
-    ASSERT_EQ(expected, 1600);
+    REQUIRE(expected == 1600);
 }

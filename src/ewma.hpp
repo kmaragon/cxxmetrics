@@ -2,6 +2,7 @@
 #define CXXMETRICS_EWMA_HPP
 
 #include "metric.hpp"
+#include "snapshots.hpp"
 #include <cmath>
 #include <chrono>
 #include <atomic>
@@ -151,13 +152,15 @@ bool ewma<TClockGet, TValue>::compare_exchange(TValue &expectedrate, TValue rate
 template<typename TClockGet, typename TValue>
 TValue ewma<TClockGet, TValue>::rate() noexcept
 {
+    auto now = clk_();
+
+    // See if we crossed the interval threshold. If so we need to tick
+    if (now > last_ && (now - last_) >= interval_)
+        tick(now);
+
     auto rate = rate_.load();
     if (rate < 0)
         return 0;
-
-    auto now = clk_();
-    if ((now - last_) >= interval_)
-        tick(now);
 
     return rate;
 }
@@ -279,7 +282,6 @@ public:
     { }
 
     ewma(const ewma &ewma) noexcept = default;
-    virtual ~ewma() = default;
 
     ewma &operator=(const ewma &e) noexcept = default;
 
@@ -327,10 +329,12 @@ public:
         return *this;
     }
 
-protected:
-    bool compare_exchange(TValue expectedrate, TValue rate)
+    /**
+     * Get a snapshot of the moving average
+     */
+    average_value_snapshot snapshot() const noexcept
     {
-        return ewma_.compare_exchange(expectedrate, rate);
+        return average_value_snapshot(ewma_.rate());
     }
 };
 

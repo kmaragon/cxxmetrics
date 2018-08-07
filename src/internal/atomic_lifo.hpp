@@ -246,7 +246,8 @@ namespace cxxmetrics {
                 }
             }
 
-            void push(T value)
+            template<typename _T = T>
+            void push(typename std::enable_if<!std::is_same<node*, _T*>::value, _T>::type value)
             {
                 return emplace(std::move(value));
             }

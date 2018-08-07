@@ -1,25 +1,31 @@
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include <counter.hpp>
 
 using namespace cxxmetrics;
 
-TEST(counter_test, incr_and_wrappers_work)
+TEST_CASE("Counter incr and wrappers work", "[counter]")
 {
     counter<int64_t> a(15);
     a += 5;
-    ASSERT_EQ(a, 20);
+    REQUIRE(a == 20);
 
     ++a;
-    ASSERT_EQ(a, 21);
+    REQUIRE(a == 21);
 
     a -= 16;
-    ASSERT_EQ(a, 5);
+    REQUIRE(a == 5);
 
     --a;
-    ASSERT_EQ(a, 4);
+    REQUIRE(a == 4);
 
     a = 10;
-    ASSERT_EQ(a, 10);
+    REQUIRE(a == 10);
 
-    ASSERT_EQ(a.metric_type().substr(0, 20), "cxxmetrics::counter<");
+    REQUIRE(a.metric_type().substr(0, 20) == "cxxmetrics::counter<");
+}
+
+TEST_CASE("Counter excercise snapshot", "[counter]")
+{
+    counter<double> a(15.7);
+    REQUIRE(a.snapshot() == 15.7);
 }

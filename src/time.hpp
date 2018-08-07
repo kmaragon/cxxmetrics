@@ -1,6 +1,8 @@
 #ifndef CXXMETRICS_TIME_HPP
 #define CXXMETRICS_TIME_HPP
 
+#include <unordered_map>
+#include <chrono>
 #include "meta.hpp"
 
 namespace cxxmetrics
@@ -53,6 +55,8 @@ public:
     }
 };
 
+namespace literals {
+
 constexpr period operator""_micro(period::value v)
 {
     return v;
@@ -82,6 +86,25 @@ constexpr period operator""_day(period::value v)
 {
     return operator""_hour(v * 24);
 }
+
+}
+
+}
+
+namespace std
+{
+
+template<typename _rep, typename ratio>
+struct hash<std::chrono::duration<_rep, ratio>>
+{
+    typedef std::chrono::duration<_rep, ratio> argument_type;
+    typedef std::size_t result_type;
+    result_type operator()(argument_type const& s) const
+    {
+        return std::hash<_rep>{}(s.count());
+    }
+};
+
 }
 
 #endif //CXXMETRICS_TIME_HPP

@@ -1,2 +1,2 @@
 [requires]
-googletest/1.8.0@kmaragon/stable
+catch2/2.3.0@bincrafters/stable
