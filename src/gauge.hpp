@@ -5,13 +5,6 @@
 #include "snapshots.hpp"
 #include <type_traits>
 
-#if __cplusplus < 201700L
-namespace std {
-	template<typename T>
-    using invoke_result = result_of<T>;
-}
-#endif
-
 namespace cxxmetrics
 {
 

@@ -2,7 +2,7 @@
 #define CXXMETRICS_XIMPLE_RESERVOIR_HPP
 
 #include "ringbuf.hpp"
-#include "reservoir.hpp"
+#include "snapshots.hpp"
 
 namespace cxxmetrics
 {
@@ -37,9 +37,9 @@ public:
      *
      * \return a reservoir
      */
-    inline auto snapshot() const noexcept
+    reservoir_snapshot snapshot() const noexcept
     {
-        return reservoirs::reservoir_snapshot(data_.begin(), data_.end(), TSize);
+        return reservoir_snapshot(data_.begin(), data_.end(), TSize);
     }
 
 };

@@ -2,7 +2,7 @@
 #define CXXMETRICS_SLIDING_WINDOW_HPP
 
 #include "ewma.hpp"
-#include "reservoir.hpp"
+#include "snapshots.hpp"
 #include "ringbuf.hpp"
 
 namespace cxxmetrics
@@ -206,7 +206,7 @@ public:
      *
      * \return a reservoir snapshot
      */
-    reservoirs::reservoir_snapshot snapshot() const noexcept;
+    reservoir_snapshot snapshot() const noexcept;
 };
 
 template<typename TElem, size_t TMaxSize, typename TClockGet>
@@ -255,7 +255,7 @@ void sliding_window_reservoir<TElem, TMaxSize, TClockGet>::update(const TElem &v
 }
 
 template<typename TElem, size_t TMaxSize, typename TClockGet>
-reservoirs::reservoir_snapshot sliding_window_reservoir<TElem, TMaxSize, TClockGet>::snapshot() const noexcept
+reservoir_snapshot sliding_window_reservoir<TElem, TMaxSize, TClockGet>::snapshot() const noexcept
 {
     auto now = clock_();
     auto min = now - window_;
@@ -267,7 +267,7 @@ reservoirs::reservoir_snapshot sliding_window_reservoir<TElem, TMaxSize, TClockG
             break;
     }
 
-    return reservoirs::reservoir_snapshot(transform_iterator(begin), transform_iterator(data_.end()), TMaxSize);
+    return reservoir_snapshot(transform_iterator(begin), transform_iterator(data_.end()), TMaxSize);
 }
 
 }

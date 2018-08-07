@@ -503,12 +503,12 @@ public:
      * \example
      * For example, in order to track the average over a window with a halflife of 15 minutes of transactions per second:
      * \code
-     * meter_with_mean<15_min> meter(5_sec);
+     * meter_with_mean<15_min> meter(1_sec);
      * \endcode
      *
      * @param interval the interval that represents the discrete points over which the moving average is applied
      */
-    explicit meter_rates_only(const std::chrono::steady_clock::duration &interval = std::chrono::seconds(5)) :
+    explicit meter_rates_only(const std::chrono::steady_clock::duration &interval = std::chrono::seconds(1)) :
             base(interval)
     {
     }

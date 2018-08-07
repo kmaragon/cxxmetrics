@@ -4,6 +4,13 @@
 #include <ctti/type_id.hpp>
 #include "tag_set.hpp"
 
+#if __cplusplus < 201700L
+namespace std {
+template<typename T>
+using invoke_result = result_of<T>;
+}
+#endif
+
 namespace cxxmetrics
 {
 

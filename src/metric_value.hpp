@@ -5,6 +5,7 @@
 #include <string>
 #include <cmath>
 #include <cstddef>
+#include "time.hpp"
 
 namespace cxxmetrics
 {
@@ -437,7 +438,7 @@ public:
 
     std::size_t hash_value() const override
     {
-        return std::hash<std::string>()(dur_);
+        return std::hash<std::chrono::duration<TRep, TPeriod>>()(dur_);
     }
 
     void copy(void* into) const noexcept override
@@ -461,22 +462,42 @@ public:
     void multiply(const variant_data& other) noexcept override
     {
         bool valid;
-        auto dv = other.to_nanos(&valid);
-        if (valid)
-            dur_ *= dv;
+        auto lv = other.to_integral(&valid);
+        if (!valid)
+        {
+            auto fv = other.to_float(&valid);
+            if (!valid)
+                return;
+
+            dur_ *= fv;
+            return;
+        }
+
+        dur_ *= lv;
     }
 
     void divide(const variant_data& other) noexcept override
     {
         bool valid;
-        auto dv = other.to_nanos(&valid);
-        if (valid)
+        auto lv = other.to_integral(&valid);
+        if (!valid)
         {
-            if (!dv.count())
-                dur_ = 0;
+            auto fv = other.to_float(&valid);
+            if (!valid)
+                return;
+
+            if (!fv)
+                dur_ = dur_.zero();
             else
-                dur_ /= dv;
+                dur_ /= fv;
+
+            return;
         }
+
+        if (!lv)
+            dur_ = dur_.zero();
+        else
+            dur_ /= lv;
     }
 
     void negate() noexcept override
@@ -486,7 +507,6 @@ public:
 
     void bitwise_negate() noexcept override
     {
-        dur_ = ~dur_;
     }
 
     int compare(const variant_data& other) const noexcept override
@@ -842,6 +862,7 @@ public:
         return value_.to_string();
     }
 
+    template<typename TRep, typename TPer>
     operator std::chrono::nanoseconds() const
     {
         return value_.to_nanos();
@@ -860,12 +881,22 @@ namespace std
 template<>
 struct hash<cxxmetrics::metric_value>
 {
-    std::size_t operator()(const cxxmetrics::metric_value& v) const
+    std::size_t operator()(const cxxmetrics::metric_value &v) const
     {
         return v.value_.hash_value();
     }
 };
 
+namespace chrono
+{
+
+template<typename _ToDur>
+constexpr _ToDur duration_cast(const cxxmetrics::metric_value &v)
+{
+    return duration_cast<_ToDur>(static_cast<std::chrono::nanoseconds>(v));
 }
 
+}
+
+}
 #endif //CXXMETRICS_METRIC_VALUE_HPP

@@ -55,13 +55,14 @@ public:
     }
 
     /**
-     * \brief Get a snapshot of the items in the underlying reservoir
+     * \brief Get a snapshot of the histogram
      *
-     * \return a snapshot of the items in the underlying reservoir
+     * \return a snapshot of the histogram
      */
-    auto snapshot() const noexcept
+    histogram_snapshot snapshot() const noexcept
     {
-        return reservoir_.snapshot();
+        auto c = count_.value();
+        return histogram_snapshot(reservoir_.snapshot(), c);
     }
 };
 

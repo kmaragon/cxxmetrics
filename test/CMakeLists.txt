@@ -15,6 +15,8 @@ set(SOURCES
         reservoir_test.cpp
         ringbuf_test.cpp
         #skiplist_test.cpp
+        histogram_test.cpp
+        timer_test.cpp
         main.cpp
 )
 

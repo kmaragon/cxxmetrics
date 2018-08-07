@@ -26,8 +26,7 @@ set(HEADERS
         metric.hpp
         pool.hpp
         skiplist.hpp
-        reservoir.hpp
-        ringbuf.hpp
+		ringbuf.hpp
         simple_reservoir.hpp
         sliding_window.hpp
         tag_set.hpp

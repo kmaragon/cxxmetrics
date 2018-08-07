@@ -1,6 +1,7 @@
 #ifndef CXXMETRICS_TIMER_HPP
 #define CXXMETRICS_TIMER_HPP
 
+#include <optional>
 #include "histogram.hpp"
 #include "meter.hpp"
 #include "uniform_reservoir.hpp"
@@ -27,27 +28,41 @@ public:
     using time_point = typename TClock::time_point;
     using clock_type = TClock;
 
-    timer() = default;
-
     /**
-     * \brief Construct a timer with a reservoir and a clock instance
+     * \brief Construct a timer with a rate interval, a reservoir and a clock instance
      *
      * This will usually not get used. It is provided to provide special clocks with std::chrono semantics but rely on internal state
      *
+     * \param rate_interval the interval for which to collect call rates on
      * \param reservoir The reservoir to use for the timer
      * \param clock the clock to use for tracking wall-clock time
      */
-    timer(TReservoir &&reservoir, TClock &&clock = TClock()) :
+    template<typename TRep, typename TPer>
+    timer(const std::chrono::duration<TRep, TPer>& rate_interval, TReservoir &&reservoir, TClock &&clock) :
             histogram_(std::forward<TReservoir>(reservoir)),
+            meter_(rate_interval),
             clock_(std::forward<TReservoir>(clock)) {}
 
     /**
-     * \brief Construct a timer with a reservoir instance
+     * \brief Construct a timer with a rate interval and reservoir instance
      *
      * \param reservoir the reservoir backing the timer
      */
-    timer(TReservoir &&reservoir) :
-            histogram_(std::forward<TReservoir>(reservoir)) {}
+    template<typename TRep, typename TPer>
+    timer(const std::chrono::duration<TRep, TPer>& rate_interval, TReservoir &&reservoir = TReservoir()) :
+            histogram_(std::forward<TReservoir>(reservoir)),
+            meter_(rate_interval)
+    {}
+
+    /**
+     * \brief Construct a timer with a reservoir instance (or default construct)
+     *
+     * \param reservoir the reservoir backing the timer
+     */
+    template<typename TRep, typename TPer>
+    timer(TReservoir &&reservoir = TReservoir()) :
+            histogram_(std::forward<TReservoir>(reservoir))
+    {}
 
     /**
      * \brief Get the mean throughput of timer updates
@@ -58,16 +73,6 @@ public:
     double mean() const noexcept
     {
         return meter_.mean();
-    }
-
-    /**
-     * \brief Get all of the rates defined in the TWindows template parameter
-     *
-     * \return a collection of rates and the duration to which they correspond
-     */
-    auto rates_collection() const noexcept
-    {
-        return meter_.rates_collection();
     }
 
     /**
@@ -147,9 +152,14 @@ public:
      *
      * \return a snapshot of the time metrics
      */
-    auto snapshot() const
+    timer_snapshot<TWithMean> snapshot() const
     {
-        return histogram_.snapshot();
+        return timer_snapshot<TWithMean>(histogram_.snapshot(), meter_.snapshot());
+    }
+
+    timer_snapshot<TWithMean> snapshot()
+    {
+        return timer_snapshot<TWithMean>(histogram_.snapshot(), meter_.snapshot());
     }
 };
 
@@ -159,10 +169,35 @@ public:
  * \tparam TTimer the type of timer that will be logged to
  */
 template<typename TTimer>
-class scoped_timer
+class scoped_timer_t
 {
     TTimer& timer_;
-    std::optional<typename TTimer::time_point> start_;
+    // std::optional is still in experimental for C++14
+    struct start_point
+    {
+        typename TTimer::time_point start;
+        bool set;
+
+        start_point() :
+                set(false)
+        { }
+
+        start_point(const typename TTimer::time_point& s) :
+                start(s),
+                set(true)
+        { }
+
+        start_point& operator=(const typename TTimer::time_point& s) noexcept
+        {
+            start = s;
+            set = true;
+            return *this;
+        }
+
+        void reset() noexcept { set = false; }
+    };
+
+    start_point start_;
 
 public:
     /**
@@ -170,23 +205,23 @@ public:
      *
      * \param timer the timer to log to when going out of scope
      */
-    scoped_timer(TTimer& timer) :
+    scoped_timer_t(TTimer& timer) :
             timer_(timer),
             start_(timer.clock().now())
     { }
 
-    scoped_timer(const scoped_timer&) = delete;
-    scoped_timer(scoped_timer&& other) noexcept :
+    scoped_timer_t(const scoped_timer_t&) = delete;
+    scoped_timer_t(scoped_timer_t&& other) noexcept :
             timer_(other.timer_),
-            start_(other.start_)
+            start_(std::move(other.start_))
     {
         other.clear();
     }
 
-    ~scoped_timer()
+    ~scoped_timer_t()
     {
-        if (start_)
-            timer_.update(timer_.clock().now() - *start_);
+        if (start_.set)
+            timer_.update(timer_.clock().now() - start_.start);
     }
 
     /**
@@ -206,11 +241,17 @@ public:
     }
 };
 
+template<typename TTimer>
+inline scoped_timer_t<TTimer> scoped_timer(TTimer& timer)
+{
+    return scoped_timer_t<TTimer>(timer);
+}
+
 template<typename TClock, typename TReservoir, bool TWithMean, period::value... TWindows>
 template<typename TRunnable, bool TIncludeExceptions>
 typename std::invoke_result<TRunnable>::type timer<TClock, TReservoir, TWithMean, TWindows...>::time(const TRunnable &runnable)
 {
-    scoped_timer<timer<TClock, TReservoir, TWithMean, TWindows...>> tm(*this);
+    scoped_timer_t<timer<TClock, TReservoir, TWithMean, TWindows...>> tm(*this);
     if (!TIncludeExceptions)
     {
         try

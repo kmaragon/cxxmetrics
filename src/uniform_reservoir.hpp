@@ -1,7 +1,7 @@
 #ifndef CXXMETRICS_UNIFORM_RESERVOIR_HPP
 #define CXXMETRICS_UNIFORM_RESERVOIR_HPP
 
-#include "reservoir.hpp"
+#include "snapshots.hpp"
 #include <atomic>
 #include <chrono>
 #include <random>
@@ -64,9 +64,9 @@ public:
      *
      * \return a reservoir
      */
-    inline auto snapshot() const noexcept
+    reservoir_snapshot snapshot() const noexcept
     {
-        return reservoirs::reservoir_snapshot(&elems_[0], std::min(count_.load(), TSize));
+        return reservoir_snapshot(&elems_[0], std::min(count_.load(), TSize));
     }
 };
 
