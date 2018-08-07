@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include <simple_reservoir.hpp>
 #include <uniform_reservoir.hpp>
 #include <sliding_window.hpp>
@@ -8,7 +8,7 @@ using namespace std;
 using namespace cxxmetrics;
 using namespace cxxmetrics::literals;
 
-TEST(reservoir_test, uniform_reservoir_on_exact_count)
+TEST_CASE("Uniform Reservoir on exact count", "[reservoir]")
 {
     uniform_reservoir<double, 5> r;
 
@@ -20,16 +20,16 @@ TEST(reservoir_test, uniform_reservoir_on_exact_count)
 
     auto s = r.snapshot();
 
-    ASSERT_DOUBLE_EQ(s.min(), 10.0);
-    ASSERT_DOUBLE_EQ(s.max(), 45.0);
-    ASSERT_TRUE(abs(s.value<99_p>() - 45.0) < 1) << "Expected P99 to be about 45 but it was " << s.value<99_p>();
-    ASSERT_TRUE(abs(s.value<60_p>() - 35.0) <= 1) << "Expected P60 to be about 35 but it was " << s.value<60_p>();
-    ASSERT_DOUBLE_EQ(s.mean(), 28.0);
+    REQUIRE_THAT(s.min(), Catch::WithinULP(10.0, 1));
+    REQUIRE_THAT(s.max(), Catch::WithinULP(45.0, 1));
+    REQUIRE(abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
+    REQUIRE(abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
+    REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
 
     uniform_reservoir<double, 5> q = r;
 }
 
-TEST(reservoir_test, uniform_reservoir_with_overflow)
+TEST_CASE("Uniform Reservoir with overflow", "[reservoir]")
 {
     uniform_reservoir<double, 100> r;
 
@@ -44,13 +44,13 @@ TEST(reservoir_test, uniform_reservoir_with_overflow)
     auto mean = s.mean();
     auto p50 = s.value<50_p>();
 
-    ASSERT_TRUE(abs(min - 100) < 20) << "Expected min to be around 100 bit it was " << min;
-    ASSERT_TRUE(abs(max - 200) < 20) << "Expected max to be around 200 bit it was " << max;
-    ASSERT_TRUE(abs(mean - 150) < 20) << "Expected mean to be around 150 bit it was " << mean;
-    ASSERT_TRUE(abs(p50 - 150) < 20) << "Expected P50 to be around 150 bit it was " << p50;
+    REQUIRE(abs(static_cast<double>(min) - 100) < 20);
+    REQUIRE(abs(static_cast<double>(max) - 200) < 20);
+    REQUIRE(abs(static_cast<double>(mean) - 150) < 20);
+    REQUIRE(abs(static_cast<double>(p50) - 150) < 20);
 }
 
-TEST(reservoir_test, simple_reservoir_overflow)
+TEST_CASE("Simple Reservoir overflow", "[reservoir]")
 {
     simple_reservoir<double, 5> r;
 
@@ -65,16 +65,16 @@ TEST(reservoir_test, simple_reservoir_overflow)
 
     auto s = r.snapshot();
 
-    ASSERT_DOUBLE_EQ(s.min(), 10.0);
-    ASSERT_DOUBLE_EQ(s.max(), 45.0);
-    ASSERT_TRUE(abs(s.value<99_p>() - 45.0) < 1) << "Expected P99 to be about 45 but it was " << s.value<99_p>();
-    ASSERT_TRUE(abs(s.value<60_p>() - 35.0) <= 1) << "Expected P60 to be about 35 but it was " << s.value<60_p>();
-    ASSERT_DOUBLE_EQ(s.mean(), 28.0);
+    REQUIRE_THAT(s.min(), Catch::WithinULP(10.0, 1));
+    REQUIRE_THAT(s.max(), Catch::WithinULP(45.0, 1));
+    REQUIRE(abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
+    REQUIRE(abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
+    REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
 
     simple_reservoir<double, 5> q = r;
 }
 
-TEST(reservoir_test, sliding_window_reservoir_only_gets_window_data)
+TEST_CASE("Sliding Window Reservoir only gets window data", "[reservoir]")
 {
     int time = 500;
     mock_clock clk(time);
@@ -103,11 +103,11 @@ TEST(reservoir_test, sliding_window_reservoir_only_gets_window_data)
 
     auto s = r.snapshot();
 
-    ASSERT_DOUBLE_EQ(s.min(), 20.0);
-    ASSERT_DOUBLE_EQ(s.max(), 60.0);
-    ASSERT_TRUE(abs(s.value<99_p>() - 60.0) < 1) << "Expected P99 to be about 60 but it was " << s.value<99_p>();
-    ASSERT_TRUE(abs(s.value<60_p>() - 40.0) <= 1) << "Expected P60 to be about 40 but it was " << s.value<60_p>();
-    ASSERT_DOUBLE_EQ(s.mean(), 37.5);
+    REQUIRE_THAT(s.min(), Catch::WithinULP(20.0, 1));
+    REQUIRE_THAT(s.max(), Catch::WithinULP(60.0, 1));
+    REQUIRE(abs(static_cast<double>(s.value<99_p>()) - 60.0) < 1);
+    REQUIRE(abs(static_cast<double>(s.value<60_p>()) - 40.0) <= 1);
+    REQUIRE_THAT(s.mean(), Catch::WithinULP(37.5, 1));
 
     sliding_window_reservoir<double, 10, mock_clock> q = r;
 }

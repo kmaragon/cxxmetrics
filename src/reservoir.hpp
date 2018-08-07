@@ -1,6 +1,10 @@
 #ifndef CXXMETRICS_RESERVOIR_HPP
 #define CXXMETRICS_RESERVOIR_HPP
 
+#include "metric_value.hpp"
+#include <vector>
+#include <algorithm>
+
 namespace cxxmetrics
 {
 
@@ -53,24 +57,20 @@ namespace reservoirs
 
 /**
  * A reservoir snapshot from which quantiles, mins, and maxes can be grabbed
- *
- * \tparam TElem The type of element in the snapshots
- * \tparam TSize The maximum number of elements in the snapshot
  */
-template<typename TElem, int TSize>
-class snapshot
+class reservoir_snapshot
 {
-    TElem values_[TSize];
-    int count_;
+    std::vector<metric_value> values_;
 public:
     /**
      * \brief Construct a snapshot using the specified iterators
      *
      * \param begin the beginning of the collection
      * \param end the end of the collection
+     * \param size the expected size for the snapshot
      */
     template <class TInputIterator>
-    snapshot(TInputIterator begin, const TInputIterator &end) noexcept;
+    reservoir_snapshot(TInputIterator begin, const TInputIterator &end, std::size_t size) noexcept;
 
     /**
      * \brief Construct a snapshot with the c style array
@@ -78,20 +78,21 @@ public:
      * \param a The array from which to construct the snapshot
      * \param count the number of items in the array
      */
-    snapshot(const TElem *a, int count) noexcept;
+    template<typename TElem>
+    reservoir_snapshot(const TElem *a, std::size_t count) noexcept;
 
     /**
      * \brief Move constructor
      */
-    snapshot(snapshot &&c) noexcept = default;
+    reservoir_snapshot(reservoir_snapshot &&c) noexcept;
 
     /**
      * \brief Move assignment constructor
      */
-    snapshot &operator=(snapshot &&other) noexcept = default;
+    reservoir_snapshot &operator=(reservoir_snapshot &&other) noexcept;
 
-    snapshot(const snapshot &c) = delete;
-    snapshot &operator=(const snapshot &c) = delete;
+    reservoir_snapshot(const reservoir_snapshot &c) = delete;
+    reservoir_snapshot &operator=(const reservoir_snapshot &c) = delete;
 
     /**
      * \brief Get the value at a specified quantile
@@ -101,25 +102,23 @@ public:
      * \return the value at the specified quantile
      */
     template<quantile::value TQuantile>
-    auto value() const noexcept
+    metric_value value() const noexcept
     {
         constexpr auto q = ((long double)quantile(TQuantile))/100.0;
         static_assert(q >= 0 && q <= 1, "The provided quantile value is invalid. Must be between 0 and 1");
 
-        using result_type = decltype(values_[0] * q);
+        if (values_.size() < 1)
+            return metric_value(0);
 
-        if (count_ < 1)
-            return result_type{};
-
-        auto pos = q * (count_ + 1);
-        auto index = static_cast<int>(pos);
+        auto pos = q * (values_.size() + 1);
+        auto index = static_cast<int64_t>(pos);
 
         if (index < 1)
-            return result_type(min());
-        if (index >= count_)
-            return result_type(max());
+            return min();
+        if (static_cast<std::size_t>(index) >= values_.size())
+            return max();
 
-        return result_type(values_[index - 1]) + (pos - index) * result_type(values_[index] - values_[index - 1]);
+        return values_[index - 1] + metric_value((pos - index) * static_cast<long double>(values_[index] - values_[index - 1]));
     }
 
     /**
@@ -127,16 +126,22 @@ public:
      *
      * \return the snapshot mean
      */
-    auto mean() const noexcept
+    metric_value mean() const noexcept
     {
-        TElem total{};
-        if (count_ < 1)
-            return decltype(total / 1.0l){};
+        metric_value total(0.0l);
+        if (values_.empty())
+            return total;
 
-        for (int i = 0; i < count_; i++)
-            total += values_[i];
+        // should we worry about overflow here?
+        for (std::size_t i = 0; i < values_.size(); i++)
+        {
+            auto vs = i + 1.0l;
+            long double eratio = i / vs;
+            long double nratio = 1.0l / vs;
+            total = (total * metric_value(eratio)) + (values_[i] * metric_value(nratio));
+        }
 
-        return total / (count_ * 1.0l);
+        return total;
     }
 
     /**
@@ -144,9 +149,9 @@ public:
      *
      * \return The minimum value in the snapshot
      */
-    inline TElem min() const noexcept
+    metric_value min() const noexcept
     {
-        return count_ < 1 ? TElem{} : values_[0];
+        return values_.empty() ? metric_value(std::numeric_limits<int64_t>::min()) : values_[0];
     }
 
     /**
@@ -154,33 +159,34 @@ public:
      *
      * \return The maximum value in the snapshot
      */
-    inline TElem max() const noexcept
+    metric_value max() const noexcept
     {
-        return count_ < 1 ? TElem{} : values_[count_-1];
+        return values_.empty() ? metric_value(std::numeric_limits<int64_t>::max()) : values_[values_.size()-1];
     }
 };
 
-template<typename TElem, int TSize>
 template<typename TInputIterator>
-snapshot<TElem, TSize>::snapshot(TInputIterator begin, const TInputIterator &end) noexcept
+reservoir_snapshot::reservoir_snapshot(TInputIterator begin, const TInputIterator &end, std::size_t size) noexcept
 {
-    int at = 0;
-    for (; begin != end && at < TSize; ++begin)
-        values_[at++] = *begin;
+    values_.reserve(size);
 
-    count_ = at;
-    std::sort(&values_[0], &values_[0] + count_);
+    std::size_t at = 0;
+    for (; begin != end && at < size; ++begin)
+        values_.emplace_back(*begin);
+
+    std::sort(values_.begin(), values_.end());
 }
 
-template<typename TElem, int TSize>
-snapshot<TElem, TSize>::snapshot(const TElem *a, int count) noexcept
+template<typename TElem>
+reservoir_snapshot::reservoir_snapshot(const TElem *a, std::size_t count) noexcept
 {
-    int at = 0;
-    for (; at < TSize && at < count; ++at)
-        values_[at] = a[at];
+    values_.reserve(count);
 
-    count_ = at;
-    std::sort(&values_[0], &values_[count_]);
+    std::size_t at = 0;
+    for (; at < count; ++at)
+        values_.emplace_back(a[at]);
+
+    std::sort(values_.begin(), values_.end());
 }
 
 }

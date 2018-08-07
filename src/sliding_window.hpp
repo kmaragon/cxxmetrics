@@ -206,7 +206,7 @@ public:
      *
      * \return a reservoir snapshot
      */
-    reservoirs::snapshot<TElem, TMaxSize> snapshot() const noexcept;
+    reservoirs::reservoir_snapshot snapshot() const noexcept;
 };
 
 template<typename TElem, size_t TMaxSize, typename TClockGet>
@@ -255,7 +255,7 @@ void sliding_window_reservoir<TElem, TMaxSize, TClockGet>::update(const TElem &v
 }
 
 template<typename TElem, size_t TMaxSize, typename TClockGet>
-reservoirs::snapshot<TElem, TMaxSize> sliding_window_reservoir<TElem, TMaxSize, TClockGet>::snapshot() const noexcept
+reservoirs::reservoir_snapshot sliding_window_reservoir<TElem, TMaxSize, TClockGet>::snapshot() const noexcept
 {
     auto now = clock_();
     auto min = now - window_;
@@ -267,7 +267,7 @@ reservoirs::snapshot<TElem, TMaxSize> sliding_window_reservoir<TElem, TMaxSize, 
             break;
     }
 
-    return reservoirs::snapshot<TElem, TMaxSize>(transform_iterator(begin), transform_iterator(data_.end()));
+    return reservoirs::reservoir_snapshot(transform_iterator(begin), transform_iterator(data_.end()), TMaxSize);
 }
 
 }

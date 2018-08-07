@@ -66,7 +66,7 @@ public:
      */
     inline auto snapshot() const noexcept
     {
-        return reservoirs::snapshot<TElem, TSize>(&elems_[0], std::min(count_.load(), TSize));
+        return reservoirs::reservoir_snapshot(&elems_[0], std::min(count_.load(), TSize));
     }
 };
 

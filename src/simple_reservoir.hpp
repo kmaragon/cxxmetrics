@@ -39,7 +39,7 @@ public:
      */
     inline auto snapshot() const noexcept
     {
-        return reservoirs::snapshot<TElem, TSize>(data_.begin(), data_.end());
+        return reservoirs::reservoir_snapshot(data_.begin(), data_.end(), TSize);
     }
 
 };

@@ -1,10 +1,10 @@
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include <ringbuf.hpp>
 
 using namespace std;
 using namespace cxxmetrics::internal;
 
-TEST(ringbuf_test, can_push_full_circle)
+TEST_CASE("Ringbuf can push full circle", "[ringbuf]")
 {
     ringbuf<double, 6> subject;
 
@@ -19,32 +19,32 @@ TEST(ringbuf_test, can_push_full_circle)
     subject.push(-91080);
     subject.push(1558771.05);
 
-    ASSERT_EQ(subject.size(), 6);
+    REQUIRE(subject.size() == 6);
     std::vector<double> values;
     values.assign(subject.begin(), subject.end());
 
-    ASSERT_EQ(values.size(), 6);
-    ASSERT_DOUBLE_EQ(values[5], 1558771.05);
-    ASSERT_DOUBLE_EQ(values[4], -91080);
-    ASSERT_DOUBLE_EQ(values[3], -99);
-    ASSERT_DOUBLE_EQ(values[2], 1);
-    ASSERT_DOUBLE_EQ(values[1], 120000.0001);
-    ASSERT_DOUBLE_EQ(values[0], 8.9);
+    REQUIRE(values.size() == 6);
+    REQUIRE_THAT(values[5], Catch::WithinULP(1558771.05, 1));
+    REQUIRE_THAT(values[4], Catch::WithinULP(-91080.0, 1));
+    REQUIRE_THAT(values[3], Catch::WithinULP(-99.0, 1));
+    REQUIRE_THAT(values[2], Catch::WithinULP(1.0, 1));
+    REQUIRE_THAT(values[1], Catch::WithinULP(120000.0001, 1));
+    REQUIRE_THAT(values[0], Catch::WithinULP(8.9, 1));
 }
 
-TEST(ringbuf_test, can_iterate_during_push)
+TEST_CASE("Ringbuf can iterate during push", "[ringbuf]")
 {
     ringbuf<double, 5> subject;
 
     subject.push(12);
 
     auto b = subject.begin();
-    ASSERT_EQ(*b, 12);
+    REQUIRE(*b == 12);
 
     subject.push(15.33);
     subject.push(18.21);
     ++b;
-    ASSERT_EQ(*b, 15.33);
+    REQUIRE(*b == 15.33);
 
     subject.push(19.001);
     subject.push(8.9);
@@ -54,10 +54,10 @@ TEST(ringbuf_test, can_iterate_during_push)
     subject.push(-91080);
 
     ++b;
-    ASSERT_EQ(*b, 8.9);
+    REQUIRE(*b == 8.9);
 }
 
-TEST(ringbuf_test, can_shift_the_whole_array)
+TEST_CASE("Ringbuf can shift the whole array", "[ringbuf]")
 {
     ringbuf<double, 5> subject;
 
@@ -67,14 +67,14 @@ TEST(ringbuf_test, can_shift_the_whole_array)
     subject.push(19.001);
     subject.push(8.9);
 
-    ASSERT_EQ(subject.size(), 5);
-    ASSERT_DOUBLE_EQ(subject.shift(), 12);
-    ASSERT_DOUBLE_EQ(subject.shift(), 15.33);
-    ASSERT_DOUBLE_EQ(subject.shift(), 18.21);
+    REQUIRE(subject.size() == 5);
+    REQUIRE_THAT(subject.shift(), Catch::WithinULP(12.0, 1));
+    REQUIRE_THAT(subject.shift(), Catch::WithinULP(15.33, 1));
+    REQUIRE_THAT(subject.shift(), Catch::WithinULP(18.21, 1));
 
-    ASSERT_EQ(subject.size(), 2);
-    ASSERT_DOUBLE_EQ(subject.shift(), 19.001);
-    ASSERT_DOUBLE_EQ(subject.shift(), 8.9);
+    REQUIRE(subject.size() == 2);
+    REQUIRE_THAT(subject.shift(), Catch::WithinULP(19.001, 1));
+    REQUIRE_THAT(subject.shift(), Catch::WithinULP(8.9, 1));
 
-    ASSERT_DOUBLE_EQ(subject.size(), 0);
+    REQUIRE_THAT(subject.size(), Catch::WithinULP(0.0, 1));
 }
