@@ -14,12 +14,23 @@ namespace cxxmetrics
  */
 class value_snapshot
 {
+protected:
     metric_value value_;
 public:
     /**
      * \brief constructor
      */
     value_snapshot(const metric_value& value) noexcept;
+
+    value_snapshot(value_snapshot&& other) :
+            value_(std::move(other.value_))
+    { }
+
+    value_snapshot& operator=(value_snapshot&& other)
+    {
+        value_ = std::move(other.value_);
+        return *this;
+    }
 
     /**
      * \brief Get the value in the snapshot
@@ -69,6 +80,11 @@ public:
     cumulative_value_snapshot(const metric_value& value) noexcept :
             value_snapshot(value)
     { }
+
+    void merge(const cumulative_value_snapshot& other) noexcept
+    {
+        value_ += other.value_;
+    }
 };
 
 class average_value_snapshot : public value_snapshot
@@ -80,15 +96,40 @@ public:
             value_snapshot(value),
             samples_(1)
     { }
+
+    average_value_snapshot(average_value_snapshot&& other) noexcept :
+            value_snapshot(std::move(other)),
+            samples_(other.samples_)
+    { }
+
+    average_value_snapshot& operator=(average_value_snapshot&& other)
+    {
+        value_snapshot::operator=(std::move(other));
+        samples_ = other.samples_;
+        return *this;
+    }
 };
 
-class meter_snapshot
+class meter_snapshot : public average_value_snapshot
 {
     std::unordered_map<std::chrono::steady_clock::duration, metric_value> rates_;
 public:
-    meter_snapshot(std::unordered_map<std::chrono::steady_clock::duration, metric_value>&& rates) :
+    meter_snapshot(metric_value&& mean, std::unordered_map<std::chrono::steady_clock::duration, metric_value>&& rates) :
+            average_value_snapshot(mean),
             rates_(std::move(rates))
     { }
+
+    meter_snapshot(meter_snapshot&& other) :
+            average_value_snapshot(std::move(other)),
+            rates_(std::move(other.rates_))
+    { }
+
+    meter_snapshot& operator=(meter_snapshot&& other)
+    {
+        average_value_snapshot::operator=(std::move(other));
+        rates_ = std::move(other.rates_);
+        return *this;
+    }
 
     auto begin() const noexcept
     {
@@ -100,16 +141,6 @@ public:
         return rates_.end();
     }
 };
-
-class meter_with_mean_snapshot : public meter_snapshot, public value_snapshot
-{
-public:
-    meter_with_mean_snapshot(const metric_value& mean, std::unordered_map<std::chrono::steady_clock::duration, metric_value>&& rates) :
-            meter_snapshot(std::move(rates)),
-            value_snapshot(mean)
-    { }
-};
-
 
 class quantile
 {
@@ -308,33 +339,125 @@ public:
             count_(std::move(count))
     { }
 
+    histogram_snapshot(histogram_snapshot&& other) :
+            reservoir_snapshot(std::move(other)),
+            count_(other.count_)
+    { }
+
+    histogram_snapshot& operator=(histogram_snapshot&& other)
+    {
+        reservoir_snapshot::operator=(std::move(other));
+        count_ = other.count_;
+        return *this;
+    }
+
     uint64_t count() const
     {
         return count_;
     }
 };
 
-template<bool TWithMean>
 class timer_snapshot : public histogram_snapshot
 {
+    meter_snapshot meter_;
 public:
-    using meter_type = typename std::conditional<TWithMean, meter_with_mean_snapshot, meter_snapshot>::type;
-
-private:
-    meter_type meter_;
-public:
-    timer_snapshot(histogram_snapshot&& h, meter_type&& m) :
+    timer_snapshot(histogram_snapshot&& h, meter_snapshot&& m) :
             histogram_snapshot(std::move(h)),
             meter_(std::move(m))
     { }
 
+    timer_snapshot(timer_snapshot&& other) noexcept :
+            histogram_snapshot(std::move(other)),
+            meter_(std::move(other.meter_))
+    { }
+
+    timer_snapshot& operator=(timer_snapshot&& other)
+    {
+        histogram_snapshot::operator=(std::move(other));
+        meter_ = std::move(other.meter_);
+        return *this;
+    }
+
     /**
      * \brief Get the rates associated with the timer. The values are the time quantiles and the rates are the rates of items timed
      */
-    const meter_type& rate() const
+    const meter_snapshot& rate() const
     {
         return meter_;
     }
+};
+
+/**
+ * \brief A visitor that can react to metric snapshots
+ */
+class snapshot_visitor
+{
+public:
+    virtual void visit(const value_snapshot& value)
+    { }
+    virtual void visit(const meter_snapshot& meter)
+    { }
+    virtual void visit(const histogram_snapshot& hist)
+    { }
+    virtual void visit(const timer_snapshot& timer)
+    {
+        visit(static_cast<const histogram_snapshot&>(timer));
+        visit(static_cast<const meter_snapshot&>(timer.rate()));
+    }
+};
+
+template<typename TVisitor>
+class invokable_snapshot_visitor : public snapshot_visitor
+{
+    TVisitor visitor_;
+
+    template<typename T, typename TSnapshot>
+    class has_overload
+    {
+        template<typename _T>
+        static std::true_type check(decltype(std::declval<_T>()(std::declval<TSnapshot>()))*);
+        template<typename _T>
+        static std::false_type check(...);
+    public:
+        static constexpr bool value = decltype(check<T>(nullptr))::value;
+    };
+
+    class overload_caller
+    {
+        TVisitor& visitor_;
+    public:
+        overload_caller(TVisitor& visitor) :
+                visitor_(visitor)
+        { }
+
+        template<typename TSnapshot>
+        typename std::enable_if<has_overload<TVisitor, TSnapshot>::value, void>::type operator()(invokable_snapshot_visitor&, const TSnapshot& ss)
+        {
+            visitor_(ss);
+        }
+
+        template<typename TSnapshot>
+        typename std::enable_if<!has_overload<TVisitor, TSnapshot>::value, void>::type operator()(invokable_snapshot_visitor& base, const TSnapshot& ss)
+        {
+            base.snapshot_visitor::visit(ss);
+        }
+    };
+
+    template<typename TSnapshot>
+    void visit_hnd(const TSnapshot& ss)
+    {
+        overload_caller caller(visitor_);
+        caller(*this, ss);
+    }
+
+public:
+    invokable_snapshot_visitor(TVisitor&& visitor) :
+            visitor_(std::forward<TVisitor>(visitor))
+    { }
+    void visit(const value_snapshot& value) override { visit_hnd(value); }
+    void visit(const meter_snapshot& meter) override { visit_hnd(meter); }
+    void visit(const histogram_snapshot& hist) override { visit_hnd(hist); }
+    void visit(const timer_snapshot& timer) override { visit_hnd(timer); }
 };
 
 }

@@ -2,7 +2,6 @@
 #define CXXMETRICS_GAUGE_HPP
 
 #include "metric.hpp"
-#include "snapshots.hpp"
 #include <type_traits>
 
 namespace cxxmetrics

@@ -139,7 +139,7 @@ public:
         return std::get<location>(rates_);
     }
 
-    void mark(int64_t value)
+    constexpr void mark(int64_t value)
     {
         marker<TWindow...>::mark(this, value);
     }
@@ -220,7 +220,7 @@ public:
         efn.doeach(*this, fn);
     }
 
-    virtual void mark(int64_t by)
+    constexpr void mark(int64_t by)
     {
         rates_.mark(by);
     }
@@ -236,25 +236,9 @@ protected:
     }
 };
 
-template<bool TTrackMean, typename TClockGet, period::value ...TWindows>
-class _meter_impl;
-
-
-template<typename TClockGet, period::value ...TWindows>
-class _meter_impl<false, TClockGet, TWindows...> : public _meter_impl_base<TClockGet, TWindows...>
-{
-public:
-    explicit _meter_impl(const typename ewma<TClockGet>::clock_diff &interval, const TClockGet &clkget = TClockGet()) noexcept :
-            _meter_impl_base<TClockGet, TWindows...>(interval, clkget)
-    { }
-
-    _meter_impl(const _meter_impl &c) noexcept = default;
-    _meter_impl &operator=(const _meter_impl &c) noexcept = default;
-};
-
 // specialization for track rate mean
 template<typename TClockGet, period::value ...TWindows>
-class _meter_impl<true, TClockGet, TWindows...> : public _meter_impl_base<TClockGet, TWindows...>
+class _meter_impl : public _meter_impl_base<TClockGet, TWindows...>
 {
     typename _meter_impl_base<TClockGet>::clock_point start_;
     std::atomic_int_fast64_t total_;
@@ -291,7 +275,7 @@ public:
         return (total_ * 1.0) / units;
     }
 
-    void mark(int64_t by) override
+    void mark(int64_t by = 1)
     {
         _meter_impl_base<TClockGet, TWindows...>::mark(by);
         total_ += by;
@@ -304,11 +288,11 @@ public:
 namespace meters
 {
 
-template<bool TWithMean, period::value ...TWindows>
-class meter : public metric<meter<TWithMean, TWindows...>>
+template<period::value ...TWindows>
+class meter : public metric<meter<TWindows...>>
 {
 protected:
-    internal::_meter_impl<true, steady_clock_point, TWindows...> impl_;
+    internal::_meter_impl<steady_clock_point, TWindows...> impl_;
     explicit meter(const std::chrono::steady_clock::duration &interval) noexcept;
 
     struct map_builder
@@ -344,47 +328,98 @@ protected:
         return builder.rates();
     }
 public:
+
     meter(const meter &m) noexcept = default;
     meter &operator=(const meter &m) noexcept = default;
 
-    inline void mark(int64_t by)
+    /**
+     * \brief Mark some values in the meter
+     *
+     * \param by the value to mark the meter by
+     */
+    inline void mark(int64_t by = 1)
     {
         impl_.mark(by);
     }
 
+    /**
+     * \brief Get the rate of a known tracked window
+     *
+     * If you specify a period that isn't one of the windows provided
+     * This will just fail to compile
+     *
+     * \return The rate measured thus far over the specified window
+     */
     template<period::value TAt>
     constexpr meter_rate rate() noexcept
     {
         return { period(TAt), impl_.template get_rate<TAt>() };
     }
 
+    /**
+     * \brief Get the rate of a known tracked window
+     *
+     * If you specify a period that isn't one of the windows provided
+     * This will just fail to compile
+     *
+     * \return The rate measured thus far over the specified window
+     */
     template<period::value TAt>
     constexpr meter_rate rate() const noexcept
     {
         return { period(TAt), impl_.template get_rate<TAt>() };
     }
+
+    /**
+     * \brief Get the mean rate of the meter over the lifespan of tracking
+     *
+     * @return The meter's lifetime mean
+     */
+    double mean() const noexcept
+    {
+        return impl_.mean();
+    }
+
+    /**
+     * \brief Get a snapshot of the meter values
+     *
+     * \return a snapshot of the meter values
+     */
+    meter_snapshot snapshot()
+    {
+        return meter_snapshot(mean(), this->rates_snapshot());
+    }
+
+    /**
+     * \brief Get a snapshot of the meter values
+     *
+     * \return a snapshot of the meter values
+     */
+    meter_snapshot snapshot() const
+    {
+        return meter_snapshot(mean(), this->rates_snapshot());
+    }
 };
 
-template<bool TWithMean, period::value ...TWindows>
-meter<TWithMean, TWindows...>::meter(const std::chrono::steady_clock::duration &interval) noexcept :
+template<period::value ...TWindows>
+meter<TWindows...>::meter(const std::chrono::steady_clock::duration &interval) noexcept :
     impl_(interval, steady_clock_point())
 { }
 
-template<bool TWithMean, typename TWindows>
+template<typename TWindows>
 class meter_builder;
 
-template<bool TWithMean, period::value ...TWindows>
-class meter_builder<TWithMean, templates::duration_collection<TWindows...>> : public meter<TWithMean, TWindows...>
+template<period::value ...TWindows>
+class meter_builder<templates::duration_collection<TWindows...>> : public meter<TWindows...>
 {
 public:
     inline explicit meter_builder(const std::chrono::steady_clock::duration &interval) :
-            meter<TWithMean, TWindows...>(interval)
+            meter<TWindows...>(interval)
     {
     }
 
     meter_builder(const meter_builder &other) noexcept = default;
     meter_builder &operator=(const meter_builder &other) noexcept = default;
-
 };
 
 }
@@ -395,9 +430,9 @@ public:
  * @tparam TWindows The various time windows to track. For example '15_min'
  */
 template<period::value... TWindows>
-class meter_with_mean : public meters::meter_builder<true, typename templates::sort_unique<TWindows...>::type>
+class meter : public meters::meter_builder<typename templates::sort_unique<TWindows...>::type>
 {
-    using base = meters::meter_builder<true, typename templates::sort_unique<TWindows...>::type>;
+    using base = meters::meter_builder<typename templates::sort_unique<TWindows...>::type>;
 public:
     /**
      * \brief construct a meter that measures the rates provided using the specified interval
@@ -410,169 +445,14 @@ public:
      *
      * @param interval the interval that represents the discrete points over which the moving average is applied
      */
-    explicit meter_with_mean(const std::chrono::steady_clock::duration &interval = std::chrono::seconds(5)) :
+    explicit meter(const std::chrono::steady_clock::duration &interval = std::chrono::seconds(5)) :
             base(interval)
     {
     }
 
-    meter_with_mean(const meter_with_mean &m) noexcept  = default;
-    meter_with_mean &operator=(const meter_with_mean &m) noexcept = default;
+    meter(const meter& m) noexcept  = default;
+    meter& operator=(const meter& m) noexcept = default;
 
-    /**
-     * \brief Get the mean rate of the meter over the lifespan of tracking
-     *
-     * @return The meter's lifetime mean
-     */
-    double mean() const noexcept
-    {
-        return base::impl_.mean();
-    }
-
-    /**
-     * \brief Get the rate of a known tracked window
-     *
-     * If you specify a period that isn't one of the windows provided
-     * This will just fail to compile
-     *
-     * \return The rate measured thus far over the specified window
-     */
-    template<period::value TAt>
-    inline meter_rate rate() const
-    {
-        return base::template rate<TAt>();
-    }
-
-    /**
-     * \brief Get the rate of a known tracked window
-     *
-     * If you specify a period that isn't one of the windows provided
-     * This will just fail to compile
-     *
-     * \return The rate measured thus far over the specified window
-     */
-    template<period::value TAt>
-    inline meter_rate rate()
-    {
-        return base::template rate<TAt>();
-    }
-
-    /**
-     * \brief Mark some values in the meter
-     *
-     * \param by the value to mark the meter by
-     */
-    inline void mark(int64_t by = 1)
-    {
-        base::mark(by);
-    }
-
-    /**
-     * \brief Get a snapshot of the meter values
-     *
-     * \return a snapshot of the meter values
-     */
-    meter_with_mean_snapshot snapshot()
-    {
-        return meter_with_mean_snapshot(mean(), this->rates_snapshot());
-    }
-
-    /**
-     * \brief Get a snapshot of the meter values
-     *
-     * \return a snapshot of the meter values
-     */
-    meter_with_mean_snapshot snapshot() const
-    {
-        return meter_with_mean_snapshot(mean(), this->rates_snapshot());
-    }
-};
-
-/**
- * \brief A meter that tracks the lifetime mean along with the rates specified in the template parameters
- *
- * @tparam TWindows The various time windows to track. For example '15_min'
- */
-template<period::value... TWindows>
-class meter_rates_only : public meters::meter_builder<false, typename templates::sort_unique<TWindows...>::type>
-{
-    using base = meters::meter_builder<false, typename templates::sort_unique<TWindows...>::type>;
-public:
-    /**
-     * \brief construct a meter that measures the rates provided using the specified interval
-     *
-     * \example
-     * For example, in order to track the average over a window with a halflife of 15 minutes of transactions per second:
-     * \code
-     * meter_with_mean<15_min> meter(1_sec);
-     * \endcode
-     *
-     * @param interval the interval that represents the discrete points over which the moving average is applied
-     */
-    explicit meter_rates_only(const std::chrono::steady_clock::duration &interval = std::chrono::seconds(1)) :
-            base(interval)
-    {
-    }
-
-    meter_rates_only(const meter_rates_only &m) noexcept  = default;
-    meter_rates_only &operator=(const meter_rates_only &m) noexcept = default;
-
-    /**
-     * \brief Get the rate of a known tracked window
-     *
-     * If you specify a period that isn't one of the windows provided
-     * This will just fail to compile
-     *
-     * \return The rate measured thus far over the specified window
-     */
-    template<period::value TAt>
-    inline meter_rate rate() const
-    {
-        return base::template rate<TAt>();
-    }
-
-    /**
-     * \brief Get the rate of a known tracked window
-     *
-     * If you specify a period that isn't one of the windows provided
-     * This will just fail to compile
-     *
-     * \return The rate measured thus far over the specified window
-     */
-    template<period::value TAt>
-    inline meter_rate rate()
-    {
-        return base::template rate<TAt>();
-    }
-
-    /**
-     * \brief Mark some values in the meter
-     *
-     * \param by the value to mark the meter by
-     */
-    inline void mark(int64_t by = 1)
-    {
-        base::mark(by);
-    }
-
-    /**
-     * \brief Get a snapshot of the meter values
-     *
-     * \return a snapshot of the meter values
-     */
-    meter_snapshot snapshot()
-    {
-        return meter_snapshot(this->rates_snapshot());
-    }
-
-    /**
-     * \brief Get a snapshot of the meter values
-     *
-     * \return a snapshot of the meter values
-     */
-    meter_snapshot snapshot() const
-    {
-        return meter_snapshot(this->rates_snapshot());
-    }
 };
 
 }

@@ -2,7 +2,6 @@
 #define CXXMETRICS_EWMA_HPP
 
 #include "metric.hpp"
-#include "snapshots.hpp"
 #include <cmath>
 #include <chrono>
 #include <atomic>

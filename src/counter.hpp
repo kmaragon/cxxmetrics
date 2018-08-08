@@ -2,7 +2,6 @@
 #define CXXMETRICS_COUNTER_HPP
 
 #include "metric.hpp"
-#include "snapshots.hpp"
 #include <atomic>
 
 namespace cxxmetrics

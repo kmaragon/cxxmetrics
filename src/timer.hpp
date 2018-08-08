@@ -16,11 +16,11 @@ namespace cxxmetrics
  * \tparam TReservoir The type of reservoir to use for the underlying histogram of timings
  * \tparam TWindows The meter periods to track rates of, for example: 10_sec, 1_min, 1_hour
  */
-template<typename TClock = std::chrono::system_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, bool TWithMean = true, period::value... TWindows>
-class timer : public metric<timer<TClock, TReservoir, TWithMean, TWindows...>>
+template<typename TClock = std::chrono::system_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, period::value... TWindows>
+class timer : public metric<timer<TClock, TReservoir, TWindows...>>
 {
     histogram<typename TClock::duration, TReservoir> histogram_;
-    typename std::conditional<TWithMean, meter_with_mean<TWindows...>, meter_rates_only<TWindows...>>::type meter_;
+    meter<TWindows...> meter_;
     TClock clock_;
 
 public:
@@ -69,7 +69,6 @@ public:
      *
      * \return the mean throughput of timer updates
      */
-    template<typename = typename std::enable_if<TWithMean>::type>
     double mean() const noexcept
     {
         return meter_.mean();
@@ -152,14 +151,14 @@ public:
      *
      * \return a snapshot of the time metrics
      */
-    timer_snapshot<TWithMean> snapshot() const
+    timer_snapshot snapshot() const
     {
-        return timer_snapshot<TWithMean>(histogram_.snapshot(), meter_.snapshot());
+        return timer_snapshot(histogram_.snapshot(), meter_.snapshot());
     }
 
-    timer_snapshot<TWithMean> snapshot()
+    timer_snapshot snapshot()
     {
-        return timer_snapshot<TWithMean>(histogram_.snapshot(), meter_.snapshot());
+        return timer_snapshot(histogram_.snapshot(), meter_.snapshot());
     }
 };
 
@@ -247,11 +246,11 @@ inline scoped_timer_t<TTimer> scoped_timer(TTimer& timer)
     return scoped_timer_t<TTimer>(timer);
 }
 
-template<typename TClock, typename TReservoir, bool TWithMean, period::value... TWindows>
+template<typename TClock, typename TReservoir, period::value... TWindows>
 template<typename TRunnable, bool TIncludeExceptions>
-typename std::invoke_result<TRunnable>::type timer<TClock, TReservoir, TWithMean, TWindows...>::time(const TRunnable &runnable)
+typename std::invoke_result<TRunnable>::type timer<TClock, TReservoir, TWindows...>::time(const TRunnable &runnable)
 {
-    scoped_timer_t<timer<TClock, TReservoir, TWithMean, TWindows...>> tm(*this);
+    scoped_timer_t<timer<TClock, TReservoir, TWindows...>> tm(*this);
     if (!TIncludeExceptions)
     {
         try

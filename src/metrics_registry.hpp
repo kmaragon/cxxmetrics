@@ -9,6 +9,42 @@
 
 namespace cxxmetrics
 {
+template<typename TRepository>
+class metrics_registry;
+
+namespace internal
+{
+
+class registered_snapshot_visitor_builder
+{
+public:
+    virtual std::size_t visitor_size() const = 0;
+    virtual void construct(snapshot_visitor* location, const tag_collection& collection) = 0;
+};
+
+template<typename TVisitor>
+class invokable_snapshot_visitor_builder : public registered_snapshot_visitor_builder
+{
+    TVisitor visitor_;
+    using visitor_type = decltype(std::bind(std::declval<TVisitor>(), std::declval<tag_collection&>(), std::placeholders::_1));
+public:
+    invokable_snapshot_visitor_builder(TVisitor&& visitor) :
+            visitor_(std::forward<TVisitor>(visitor))
+    { }
+
+    std::size_t visitor_size() const override
+    {
+        return sizeof(invokable_snapshot_visitor<visitor_type>);
+    }
+
+    void construct(snapshot_visitor* location, const tag_collection& collection) override
+    {
+        using namespace std::placeholders;
+        new (location) invokable_snapshot_visitor<visitor_type>(std::bind(visitor_, std::forward<const tag_collection&>(collection), _1));
+    }
+};
+
+}
 
 /**
  * \brief an exception thrown when a registry action is performed with the wrong metric type
@@ -57,17 +93,24 @@ public:
 class basic_registered_metric
 {
     std::string type_;
-    std::unordered_map<tag_collection, std::unique_ptr<internal::metric>> metrics_;
-    std::mutex lock_;
 
+    template<typename TMetricType>
+    TMetricType& tagged(const tag_collection& tags)
+    {
+        return *static_cast<TMetricType*>(this->child(tags));
+    }
+
+    template<typename TRepository>
+    friend class metrics_registry;
 protected:
+    virtual void visit_each(internal::registered_snapshot_visitor_builder& builder) = 0;
+    virtual void aggregate_all(snapshot_visitor& visitor) = 0;
+    virtual internal::metric* child(const tag_collection& tags) = 0;
 
-    basic_registered_metric(std::string metric_type) :
-            type_(std::move(metric_type))
-    { }
-
-    virtual std::unique_ptr<internal::metric> create() const = 0;
 public:
+    basic_registered_metric(const std::string& type) :
+            type_(type)
+    { }
 
     /**
      * \brief Visits all of the metrics with their tag values, calling a handler for each
@@ -79,31 +122,21 @@ public:
      * \param handler the instance of the handler which will be called for each of the metrics
      */
     template<typename THandler>
-    void visit(THandler&& handler) const {
-        using namespace std::placeholders;
-
-        for (const auto& pair : metrics_)
-        {
-            auto shandler = std::bind(handler, pair.first, _1);
-            pair.second->visit(shandler);
-        }
+    void visit(THandler&& handler) {
+        internal::invokable_snapshot_visitor_builder<THandler> builder(std::forward<THandler>(handler));
+        this->visit_each(builder);
     }
 
-    /**
-     * \brief Get the metric with the specified tags, creating it if it doesn't already exist
-     *
-     * \tparam TMetricType the type of metric to get - must match the type originally registered with
-     * \param tags the tags for which to get the metric
-     *
-     * \return the metric registered with the specified tags
-     */
-    template<typename TMetricType>
-    TMetricType& tagged(const tag_collection& tags);
+    template<typename THandler>
+    void aggregate(THandler&& handler) {
+        invokable_snapshot_visitor<THandler> visitor(std::forward<THandler>(handler));
+        this->aggregate_all(visitor);
+    }
 
     /**
      * \brief Get the type of metric registered
      */
-    std::string type() const { return type_; }
+    virtual std::string type() const { return type_; }
 };
 
 /**
@@ -114,30 +147,76 @@ public:
 template<typename TMetricType>
 class registered_metric : public basic_registered_metric
 {
-    static TMetricType ag_;
+    std::unordered_map<tag_collection, TMetricType> metrics_;
+    std::mutex lock_;
 
 protected:
-    std::unique_ptr<internal::metric> create() const {
-        return std::make_unique<TMetricType>();
-    }
+    void visit_each(internal::registered_snapshot_visitor_builder& builder) override;
+    void aggregate_all(snapshot_visitor& visitor) override;
+    internal::metric* child(const tag_collection& tags) override;
+
 public:
-    registered_metric() :
-            basic_registered_metric(ag_.metric_type())
+    registered_metric(const std::string& metric_type_name) :
+            basic_registered_metric(metric_type_name)
     { }
-
-    template<typename THandler>
-    void aggregate(THandler&& handler) const {
-        auto ss = ag_.snapshot();
-        auto visitor = [&ss](const tag_collection& collection, const auto& sm) {
-            ss.merge(sm.snapshot());
-        };
-
-        handler(ag_.snapshot());
-    }
 };
 
 template<typename TMetricType>
-TMetricType registered_metric<TMetricType>::ag_{};
+void registered_metric<TMetricType>::visit_each(cxxmetrics::internal::registered_snapshot_visitor_builder &builder)
+{
+    std::lock_guard<std::mutex> lock(lock_);
+    for (auto& p : metrics_)
+    {
+        auto sz = builder.visitor_size() + sizeof(std::max_align_t);
+        void* ptr = alloca(sz);
+
+        std::align(sizeof(std::max_align_t), sz, ptr, sz);
+        auto loc = reinterpret_cast<snapshot_visitor*>(ptr);
+        builder.construct(loc, p.first);
+        try
+        {
+            loc->visit(p.second.snapshot());
+        }
+        catch (...)
+        {
+            loc->~snapshot_visitor();
+            throw;
+        }
+
+        loc->~snapshot_visitor();
+    }
+}
+
+template<typename TMetricType>
+void registered_metric<TMetricType>::aggregate_all(snapshot_visitor &visitor)
+{
+    std::unique_lock<std::mutex> lock(lock_);
+
+    auto itr = metrics_.begin();
+    if (itr == metrics_.end())
+        return;
+
+    auto result = itr->second.snapshot();
+    for (++itr; itr != metrics_.end(); ++itr)
+    {
+        result.merge(itr->second.snapshot());
+    }
+
+    lock.unlock();
+    visitor.visit(result);
+}
+
+template<typename TMetricType>
+internal::metric* registered_metric<TMetricType>::child(const cxxmetrics::tag_collection &tags)
+{
+    std::lock_guard<std::mutex> lock(lock_);
+    auto res = metrics_.find(tags);
+
+    if (res != metrics_.end())
+        return &res->second;
+
+    return &metrics_.emplace(tags, TMetricType()).first->second;
+}
 
 /**
  * \brief The default metric repository that registers metrics in a standard unordered map with a mutex lock
@@ -145,15 +224,45 @@ TMetricType registered_metric<TMetricType>::ag_{};
 template<typename TAlloc>
 class basic_default_repository
 {
-    std::unordered_map<metric_path, registered_metric, std::hash<metric_path>, std::equal_to<metric_path>, TAlloc> metrics_;
+    std::unordered_map<metric_path, std::unique_ptr<basic_registered_metric>, std::hash<metric_path>, std::equal_to<metric_path>, TAlloc> metrics_;
     std::mutex lock_;
 public:
     basic_default_repository() = default;
 
-    registered_metric& get_or_add(const metric_path& name, const std::string& metric_type);
+    template<typename TMetricPtrBuilder>
+    basic_registered_metric& get_or_add(const metric_path& name, const TMetricPtrBuilder& builder);
+
+    template<typename THandler>
+    void visit(THandler&& handler);
+
 };
 
-using default_repository = basic_default_repository<std::allocator<std::pair<metric_path, registered_metric>>>;
+template<typename TAlloc>
+template<typename TMetricPtrBuilder>
+basic_registered_metric& basic_default_repository<TAlloc>::get_or_add(const metric_path& name, const TMetricPtrBuilder& builder)
+{
+    std::lock_guard<std::mutex> lock(lock_);
+    auto existing = metrics_.find(name);
+
+    if (existing == metrics_.end())
+    {
+        auto ptr = builder();
+        return *metrics_.emplace(name, std::move(ptr)).first->second;
+    }
+
+    return *existing->second;
+}
+
+template<typename TAlloc>
+template<typename THandler>
+void basic_default_repository<TAlloc>::visit(THandler&& handler)
+{
+    std::lock_guard<std::mutex> lock(lock_);
+    for (auto& pair : metrics_)
+        handler(pair.first, *pair.second);
+}
+
+using default_repository = basic_default_repository<std::allocator<std::pair<metric_path, basic_registered_metric>>>;
 
 /**
  * \brief The registry where metrics are registered
@@ -165,61 +274,28 @@ class metrics_registry
 {
     TRepository repo_;
 
-    template<typename TMetric>
-    registered_metric& registered(const metric_path& name);
+    template<typename TMetricType>
+    registered_metric<TMetricType>& get(const metric_path& path);
+
+    template<typename TMetricType>
+    TMetricType& get(const metric_path& path, const tag_collection& tags);
 
 public:
     template<typename... TRepoArgs>
     metrics_registry(TRepoArgs&&... args);
 
     metrics_registry(const metrics_registry&) = default;
-    metrics_registry(metrics_registry&&) = default;
+    metrics_registry(metrics_registry&& other) noexcept :
+            repo_(std::move(other.repo_))
+    { }
     ~metrics_registry() = default;
+
+    template<typename THandler>
+    void visit_registered_metrics(THandler&& handler);
 
     template<typename TCount = int64_t>
     counter<TCount>& counter(const metric_path& name, const tag_collection& tags = tag_collection());
 };
-
-template<typename TMetricType>
-TMetricType& basic_registered_metric::tagged(const tag_collection& tags)
-{
-    std::lock_guard<std::mutex> lock(lock_);
-    auto fnd = metrics_.find(tags);
-    if (fnd == metrics_.end())
-    {
-        auto nmetric = std::make_unique<TMetricType>();
-        auto result = metrics_.emplace(tags, std::move(nmetric));
-        return *static_cast<TMetricType*>(result.first->second.get());
-    }
-
-    // the static cast here should be safe as we've already verified the type via ctti
-    return *static_cast<TMetricType*>(fnd->second.get());
-}
-
-template<typename TAlloc>
-registered_metric& basic_default_repository<TAlloc>::get_or_add(const metric_path& name, const std::string& type)
-{
-    std::lock_guard<std::mutex> lock(lock_);
-    auto fnd = metrics_.find(name);
-    if (fnd == metrics_.end())
-    {
-        auto result = metrics_.emplace(name, type);
-        return result.first->second;
-    }
-
-    if (fnd->second.type() != type)
-        throw metric_type_mismatch(fnd->second.type(), type);
-
-    return fnd->second;
-}
-
-template<typename TRepository>
-template<typename TMetric>
-registered_metric& metrics_registry<TRepository>::registered(const metric_path& name)
-{
-    static TMetric nmetricname;
-    return repo_.get_or_add(name, nmetricname.metric_type());
-}
 
 template<typename TRepository>
 template<typename... TRepoArgs>
@@ -228,10 +304,38 @@ metrics_registry<TRepository>::metrics_registry(TRepoArgs &&... args) :
 { }
 
 template<typename TRepository>
+template<typename TMetricType>
+registered_metric<TMetricType>& metrics_registry<TRepository>::get(const metric_path& path)
+{
+    static const std::string mtype = (TMetricType()).metric_type();
+    auto& l = repo_.get_or_add(path, [tn = mtype]() { return std::make_unique<registered_metric<TMetricType>>(tn); });
+
+    if (l.type() != mtype)
+        throw metric_type_mismatch(l.type(), mtype);
+
+    return static_cast<registered_metric<TMetricType>&>(l);
+}
+
+template<typename TRepository>
+template<typename TMetricType>
+TMetricType& metrics_registry<TRepository>::get(const metric_path& path, const tag_collection& tags)
+{
+    auto& r = get<TMetricType>(path);
+    return r.template tagged<TMetricType>(tags);
+}
+
+template<typename TRepository>
+template<typename THandler>
+void metrics_registry<TRepository>::visit_registered_metrics(THandler &&handler)
+{
+    repo_.visit(std::forward<THandler>(handler));
+}
+
+template<typename TRepository>
 template<typename TCount>
 counter<TCount>& metrics_registry<TRepository>::counter(const metric_path& name, const tag_collection& tags)
 {
-    return registered<cxxmetrics::counter<TCount>>(name).template tagged<cxxmetrics::counter<TCount>>(tags);
+    return get<cxxmetrics::counter<TCount>>(name, tags);
 }
 
 }

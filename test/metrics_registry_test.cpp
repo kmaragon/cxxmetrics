@@ -1,34 +1,54 @@
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include <metrics_registry.hpp>
 
 using namespace cxxmetrics;
 
-TEST(metrics_registry_test, test_retreive_same_type)
+TEST_CASE("Registry retreiving same type works", "[metrics_registry]")
 {
     metrics_registry<> subject;
     auto* counter = &subject.counter("MyCounter");
     auto* regot = &subject.counter("MyCounter");
-    ASSERT_EQ(counter, regot);
+    REQUIRE(counter == regot);
 }
 
-TEST(metrics_registry_test, test_retreive_wrong_type)
+TEST_CASE("Registry retrieving path with wrong type throws", "[metrics_registry]")
 {
     metrics_registry<> subject;
     subject.counter("MyCounter");
-    ASSERT_THROW(subject.counter<short>("MyCounter"), metric_type_mismatch);
+    REQUIRE_THROWS_AS(subject.counter<short>("MyCounter"), metric_type_mismatch);
 }
 
-TEST(metrics_registry_test, test_retreive_same_type_different_tags)
+TEST_CASE("Registry retrieving path with different tags", "[metrics_registry]")
 {
     metrics_registry<> subject;
     auto* counter = &subject.counter("MyCounter");
     auto* regot = &subject.counter("MyCounter", {{"mytag","tagvalue"}});
-    ASSERT_NE(counter, regot);
+    REQUIRE(counter != regot);
 }
 
-TEST(metrics_registry_test, test_retreive_wrong_type_different_tags)
+TEST_CASE("Registry retrieving path with wrong type and different tags", "[metrics_registry]")
 {
     metrics_registry<> subject;
     subject.counter("MyCounter");
-    ASSERT_THROW(subject.counter<short>("MyCounter", {{"mytag", "tagvalue"}}), metric_type_mismatch);
+    REQUIRE_THROWS_AS(subject.counter<short>("MyCounter", {{"mytag", "tagvalue"}}), metric_type_mismatch);
+}
+
+TEST_CASE("Registry visitor visits counters", "[metrics_registry]")
+{
+    int names = 0;
+    int instances = 0;
+
+    metrics_registry<> subject;
+    subject.counter("MyCounter");
+    subject.counter("MyCounter", {{"mytag","tagvalue"}});
+
+    subject.visit_registered_metrics([&names, &instances](const metric_path& path, basic_registered_metric& metric) {
+        ++names;
+        metric.visit([&instances](const tag_collection& tags, const auto& ctr) {
+            ++instances;
+        });
+    });
+
+    REQUIRE(names == 1);
+    REQUIRE(instances == 2);
 }

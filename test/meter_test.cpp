@@ -11,17 +11,8 @@ using namespace cxxmetrics::literals;
 
 TEST_CASE("Meter parameters with mean get sorted for equal types", "[meter]")
 {
-    meter_with_mean<1_min, 30_min, 7_day, 1_day, 1_hour> m(5ms);
-    meter_with_mean<1_hour, 30_min, 1_day, 7_day, 7_day, 30_min, 1_min> n(5ms);
-
-    REQUIRE(m.metric_type() == ((internal::metric *)&n)->metric_type());
-    INFO("metric_type: " << m.metric_type());
-}
-
-TEST_CASE("Meter parameters without mean get sorted for equal types", "[meter]")
-{
-    meter_rates_only<1_min, 30_min, 7_day, 1_day, 1_hour> m(5ms);
-    meter_rates_only<1_hour, 30_min, 1_day, 7_day, 7_day, 30_min, 1_min> n(5ms);
+    meter<1_min, 30_min, 7_day, 1_day, 1_hour> m(5ms);
+    meter<1_hour, 30_min, 1_day, 7_day, 7_day, 30_min, 1_min> n(5ms);
 
     REQUIRE(m.metric_type() == ((internal::metric *)&n)->metric_type());
     INFO("metric_type: " << m.metric_type());
@@ -29,8 +20,8 @@ TEST_CASE("Meter parameters without mean get sorted for equal types", "[meter]")
 
 TEST_CASE("Meter copy assignment works", "[meter]")
 {
-    meter_with_mean<1_min, 30_min, 7_day, 1_day, 1_hour> m(5ms);
-    meter_with_mean<1_min, 30_min, 7_day, 1_day, 1_hour> n(m);
+    meter<1_min, 30_min, 7_day, 1_day, 1_hour> m(5ms);
+    meter<1_min, 30_min, 7_day, 1_day, 1_hour> n(m);
 
     m = n;
 }
@@ -40,7 +31,7 @@ TEST_CASE("Meter rates are passed on", "[meter]")
     int clock = 0;
     mock_clock clk(clock);
 
-    internal::_meter_impl<true, mock_clock, 1, 8, 20, 50> m(1, clk);
+    internal::_meter_impl<mock_clock, 1, 8, 20, 50> m(1, clk);
 
     for(int i = 0; i < 100; i++)
     {
@@ -65,9 +56,9 @@ TEST_CASE("Meter rates are passed on", "[meter]")
     REQUIRE_THAT(m.mean(), Catch::WithinULP(1100.0 / 111.0, 1));
 }
 
-TEST_CASE("Meter with mean snapshot", "[meter]")
+TEST_CASE("Meter snapshot", "[meter]")
 {
-    meter_with_mean<1_min, 30_min, 7_day, 1_day, 1_hour> m(5us);
+    meter<1_min, 30_min, 7_day, 1_day, 1_hour> m(5us);
     m.mark(100);
     std::this_thread::sleep_for(10us);
 
@@ -79,14 +70,3 @@ TEST_CASE("Meter with mean snapshot", "[meter]")
     REQUIRE(ss.value() != metric_value(0.0));
 }
 
-TEST_CASE("Meter without mean snapshot", "[meter]")
-{
-    meter_rates_only<1_min, 30_min, 7_day, 1_day, 1_hour> m(5us);
-    m.mark(100);
-    std::this_thread::sleep_for(10us);
-
-    auto ss = m.snapshot();
-    for (const auto& pair : ss) {
-        REQUIRE(pair.second != metric_value(0.0));
-    }
-}

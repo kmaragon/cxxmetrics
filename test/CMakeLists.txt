@@ -10,7 +10,7 @@ set(SOURCES
         ewma_test.cpp
         gauge_test.cpp
         meter_test.cpp
-        #metrics_registry_test.cpp
+        metrics_registry_test.cpp
         #pool_test.cpp
         reservoir_test.cpp
         ringbuf_test.cpp

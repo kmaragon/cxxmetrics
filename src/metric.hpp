@@ -2,7 +2,7 @@
 #define CXXMETRICS_METRIC_HPP
 
 #include <ctti/type_id.hpp>
-#include "tag_set.hpp"
+#include "snapshots.hpp"
 
 #if __cplusplus < 201700L
 namespace std {

@@ -2,7 +2,6 @@
 #define CXXMETRICS_SLIDING_WINDOW_HPP
 
 #include "ewma.hpp"
-#include "snapshots.hpp"
 #include "ringbuf.hpp"
 
 namespace cxxmetrics

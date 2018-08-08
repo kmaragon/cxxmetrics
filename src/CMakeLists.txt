@@ -22,15 +22,21 @@ set(HEADERS
         counter.hpp
         ewma.hpp
         gauge.hpp
+        histogram.hpp
         meta.hpp
+        meter.hpp
         metric.hpp
+        metric_path.hpp
+        metric_value.hpp
+        metrics_registry.hpp
         pool.hpp
-        skiplist.hpp
-		ringbuf.hpp
+        ringbuf.hpp
         simple_reservoir.hpp
+        skiplist.hpp
         sliding_window.hpp
-        tag_set.hpp
+        tag_collection.hpp
         time.hpp
+		timer.hpp
         uniform_reservoir.hpp
 )
 
@@ -39,7 +45,7 @@ target_include_directories(cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_sources_local(cxxmetrics INTERFACE ${HEADERS})
 target_link_libraries(cxxmetrics INTERFACE atomic CONAN_PKG::ctti)
 
-install(FILES ${HEADERS} DESTINATION "include")
+install(FILES ${HEADERS} DESTINATION "include/cxxmetrics")
 
 install(TARGETS cxxmetrics
         LIBRARY DESTINATION lib
