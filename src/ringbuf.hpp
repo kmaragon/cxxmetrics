@@ -169,6 +169,8 @@ ringbuf<TElemType, TSize>::iterator::iterator() noexcept :
 
 template<typename TElemType, size_t TSize>
 ringbuf<TElemType, TSize>::iterator::iterator(const ringbuf *rb, int64_t offset) noexcept :
+        offset_(-1),
+        headat_(0),
         buf_(rb)
 {
     int64_t head = rb->head_.load();
@@ -178,8 +180,7 @@ ringbuf<TElemType, TSize>::iterator::iterator(const ringbuf *rb, int64_t offset)
         int64_t at = head + offset;
         if (head == tail)
         {
-            at = -1;
-            // The container is empty... just continue
+            // The container is empty... just bail
             break;
         }
 

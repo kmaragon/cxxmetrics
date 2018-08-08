@@ -106,10 +106,10 @@ ewma<TClockGet, TValue>::ewma(const clock_diff &window, const clock_diff &interv
         alpha_(get_alpha(interval, window)),
         interval_(interval),
         window_(window),
-        rate_(-1.0),
+        rate_(0),
+        last_{},
         pending_(0)
 {
-    last_ = clk_();
 }
 
 template<typename TClockGet, typename TValue>
@@ -136,10 +136,19 @@ void ewma<TClockGet, TValue>::mark(TMark amount) noexcept
         return;
 
     // See if we crossed the interval threshold. If so we need to tick
-    if ((now - last_) >= interval_)
+    if (last_ != clock_point{})
+    {
+        if ((now - last_) >= interval_)
+            tick(now);
+        atomic_add(pending_, amount);
+    }
+    else
+    {
+        // the clock hasn't started yet - add the item to pending and attempt to tick
+        atomic_add(pending_, amount);
         tick(now);
+    }
 
-    atomic_add(pending_, amount);
 }
 
 template<typename TClockGet, typename TValue>
@@ -154,7 +163,7 @@ TValue ewma<TClockGet, TValue>::rate() noexcept
     auto now = clk_();
 
     // See if we crossed the interval threshold. If so we need to tick
-    if (now > last_ && (now - last_) >= interval_)
+    if (last_ != clock_point{} && now > last_ && (now - last_) >= interval_)
         tick(now);
 
     auto rate = rate_.load();
@@ -177,22 +186,21 @@ TValue ewma<TClockGet, TValue>::rate() const noexcept
 template<typename TClockGet, typename TValue>
 void ewma<TClockGet, TValue>::tick(const clock_point &at) noexcept
 {
-    TValue rate;
     int missed_intervals;
     clock_point last;
 
     auto pending = pending_.load();
 
 cxxmetrics_ewma_startover:
-    rate = rate_.load();
+    auto nrate = rate_.load();
     last = last_;
-    if (rate < 0)
+    if (last == clock_point{})
     {
         // one thread sets the last timestamp
         if (!pending_.compare_exchange_weak(pending, 0))
             goto cxxmetrics_ewma_startover;
 
-        if (rate_.compare_exchange_weak(rate, pending))
+        if (rate_.compare_exchange_weak(nrate, pending))
         {
             last_ = at;
             return;
@@ -205,7 +213,7 @@ cxxmetrics_ewma_startover:
 
     // apply the pending value to our current rate
     // if someone else already snagged the pending value, start over
-    rate = rate + (alpha_ * (pending - rate));
+    auto rate = nrate + (alpha_ * (pending - nrate));
 
     // figure out how many intervals we've missed
     missed_intervals = ((at - last) / interval_) - 1;
@@ -264,7 +272,7 @@ struct steady_clock_point
 /**
  * \brief An exponential weighted moving average metric
  */
-template<typename TValue>
+template<typename TValue = double>
 class ewma : public metric<ewma<TValue>>
 {
     internal::ewma<steady_clock_point, TValue> ewma_;
@@ -331,11 +339,33 @@ public:
     /**
      * Get a snapshot of the moving average
      */
+    average_value_snapshot snapshot() noexcept
+    {
+        return average_value_snapshot(ewma_.rate());
+    }
+
+    /**
+     * Get a snapshot of the moving average
+     */
     average_value_snapshot snapshot() const noexcept
     {
         return average_value_snapshot(ewma_.rate());
     }
 };
+
+namespace internal
+{
+
+template<typename TValue>
+struct default_metric_builder<cxxmetrics::ewma<TValue>>
+{
+    cxxmetrics::ewma<TValue> operator()() const
+    {
+        return cxxmetrics::ewma<TValue>(std::chrono::minutes(1));
+    }
+};
+
+}
 
 }
 

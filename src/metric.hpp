@@ -20,7 +20,25 @@ class metric
 {
 public:
     virtual std::string metric_type() const noexcept = 0;
+    virtual ~metric() = default;
 };
+
+template<typename TMetric>
+struct default_metric_builder
+{
+    TMetric operator()() const
+    {
+        return TMetric();
+    }
+};
+
+template<typename TMetric>
+inline TMetric metric_default_value()
+{
+    default_metric_builder<TMetric> m;
+    return m();
+}
+
 }
 
 /**
@@ -33,6 +51,7 @@ protected:
     metric() = default;
 
 public:
+
     /**
      * \brief Get the compile time type name of the metric type
      *

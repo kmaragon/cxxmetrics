@@ -20,7 +20,7 @@ public:
     /**
      * \brief constructor
      */
-    value_snapshot(const metric_value& value) noexcept;
+    value_snapshot(metric_value&& value) noexcept;
 
     value_snapshot(value_snapshot&& other) :
             value_(std::move(other.value_))
@@ -46,8 +46,8 @@ public:
     bool operator!=(const metric_value& value) const noexcept;
 };
 
-inline value_snapshot::value_snapshot(const metric_value &value) noexcept :
-        value_(value)
+inline value_snapshot::value_snapshot(metric_value&& value) noexcept :
+        value_(std::move(value))
 { }
 
 inline metric_value value_snapshot::value() const {
@@ -77,8 +77,8 @@ inline bool value_snapshot::operator!=(const metric_value &value) const noexcept
 class cumulative_value_snapshot : public value_snapshot
 {
 public:
-    cumulative_value_snapshot(const metric_value& value) noexcept :
-            value_snapshot(value)
+    cumulative_value_snapshot(metric_value&& value) noexcept :
+            value_snapshot(std::move(value))
     { }
 
     void merge(const cumulative_value_snapshot& other) noexcept
@@ -91,10 +91,14 @@ class average_value_snapshot : public value_snapshot
 {
     uint64_t samples_;
 
+    average_value_snapshot(metric_value&& value, uint64_t samples) :
+            value_snapshot(std::move(value)),
+            samples_(samples)
+    { }
+
 public:
-    average_value_snapshot(const metric_value& value) noexcept :
-            value_snapshot(value),
-            samples_(1)
+    average_value_snapshot(metric_value&& value) noexcept :
+            average_value_snapshot(std::move(value), 1)
     { }
 
     average_value_snapshot(average_value_snapshot&& other) noexcept :
@@ -108,6 +112,16 @@ public:
         samples_ = other.samples_;
         return *this;
     }
+
+    void merge(const average_value_snapshot& other) noexcept
+    {
+        auto sb = samples_ * 1.0l;
+        auto os = other.samples_ * 1.0l;
+        auto s1 = samples_ + os;
+
+        value_ = (metric_value(sb / s1) * value_) + (other.value() * metric_value(os / s1));
+        samples_ = s1;
+    }
 };
 
 class meter_snapshot : public average_value_snapshot
@@ -115,7 +129,7 @@ class meter_snapshot : public average_value_snapshot
     std::unordered_map<std::chrono::steady_clock::duration, metric_value> rates_;
 public:
     meter_snapshot(metric_value&& mean, std::unordered_map<std::chrono::steady_clock::duration, metric_value>&& rates) :
-            average_value_snapshot(mean),
+            average_value_snapshot(std::move(mean)),
             rates_(std::move(rates))
     { }
 
@@ -404,6 +418,7 @@ public:
         visit(static_cast<const histogram_snapshot&>(timer));
         visit(static_cast<const meter_snapshot&>(timer.rate()));
     }
+    virtual ~snapshot_visitor() = default;
 };
 
 template<typename TVisitor>

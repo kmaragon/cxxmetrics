@@ -26,6 +26,17 @@ TEST_CASE("Meter copy assignment works", "[meter]")
     m = n;
 }
 
+TEST_CASE("Meter initializes correctly", "[meter]")
+{
+    meter<1_min, 1_sec> m(5ms);
+    REQUIRE(m.rate<1_min>().rate == 0);
+    REQUIRE(m.rate<1_sec>().rate == 0);
+    REQUIRE(m.mean() == 0);
+
+    auto ss = m.snapshot();
+    REQUIRE(ss.value() == metric_value(0));
+}
+
 TEST_CASE("Meter rates are passed on", "[meter]")
 {
     int clock = 0;
@@ -39,11 +50,11 @@ TEST_CASE("Meter rates are passed on", "[meter]")
         clock++;
     }
 
-    REQUIRE(round(m.template get_rate<1>() * 100) == 1000);
-    REQUIRE(round(m.template get_rate<8>() * 100) == 1000);
-    REQUIRE(round(m.template get_rate<20>() * 100) == 1000);
-    REQUIRE(round(m.template get_rate<50>() * 100) == 1000);
-    REQUIRE(round(m.mean() * 100) == 1000);
+    REQUIRE(round(m.template get_rate<1>()) == 10);
+    REQUIRE(round(m.template get_rate<8>()) == 10);
+    REQUIRE(round(m.template get_rate<20>()) == 10);
+    REQUIRE(round(m.template get_rate<50>()) == 10);
+    REQUIRE(round(m.mean()) == 10);
 
     clock += 10;
     m.mark(100);
