@@ -39,6 +39,14 @@ TEST_CASE("Registry retrieving path with wrong type and different tags", "[metri
     REQUIRE_THROWS_AS(subject.counter<short>("MyCounter", {{"mytag", "tagvalue"}}), metric_type_mismatch);
 }
 
+TEST_CASE("Registry store existing path with wrong type throws", "[metrics_registry]")
+{
+    metrics_registry<> subject;
+    subject.counter("MyCounter");
+    auto ewma = subject.ewma<1_min>("MyEwma");
+    REQUIRE_THROWS_AS(subject.register_existing("MyCounter", ewma, {{"mytag", "tagvalue"}}), metric_type_mismatch);
+}
+
 TEST_CASE("Registry visitor visits counters", "[metrics_registry]")
 {
     int names = 0;
