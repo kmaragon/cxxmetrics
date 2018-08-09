@@ -7,20 +7,21 @@ using namespace std::chrono_literals;
 using namespace cxxmetrics;
 using namespace cxxmetrics_literals;
 
-using mock_ewma = internal::ewma<mock_clock>;
+template<period::value TWindow, period::value TInterval>
+using mock_ewma = internal::ewma<mock_clock, TWindow, TInterval>;
 
 TEST_CASE("EWMA Initializes properly", "[ewma]")
 {
-    int clock = 5;
-    mock_ewma e(30, 1, clock);
+    unsigned clock = 5;
+    mock_ewma<30, 1> e(clock);
 
     REQUIRE(e.rate() == 0);
 }
 
 TEST_CASE("EWMA backwards clock skips", "[ewma]")
 {
-    int clock = 5;
-    mock_ewma e(30, 1, clock);
+    unsigned clock = 5;
+    mock_ewma<30, 1> e(clock);
 
     e.mark(1);
 
@@ -32,8 +33,8 @@ TEST_CASE("EWMA backwards clock skips", "[ewma]")
 
 TEST_CASE("EMWA calculates fixed rate", "[ewma]")
 {
-    int clock = 1;
-    mock_ewma e(10, 1, clock);
+    unsigned clock = 1;
+    mock_ewma<10, 1> e(clock);
 
     for (int i = 0; i <= 10; i++)
     {
@@ -46,35 +47,46 @@ TEST_CASE("EMWA calculates fixed rate", "[ewma]")
 
 TEST_CASE("EWMA calculates fixed rate threads", "[ewma]")
 {
-    ewma<10_msec, 2_msec> e;
+    static constexpr auto interval = 1_msec;
+    static constexpr int loopcnt = 100;
+    ewma<100_msec, interval> e;
 
-    double rate;
+    double rate = 0;
     std::vector<std::thread> threads;
 
-    for (int i = 0; i <= 10; i++)
+    auto start = std::chrono::steady_clock::now();
+    threads.reserve(8);
+    for (int i = 0; i < 8; i++)
     {
         threads.emplace_back([&e, &rate]() {
-            for (int x = 0; x < 10; x++)
+            for (int x = 0; x < loopcnt; x++)
             {
+                std::this_thread::sleep_for(interval.to_duration());
                 e.mark(5);
                 rate = e.rate();
-                std::this_thread::sleep_for(1ms);
             }
         });
     }
 
     for (auto &thr : threads)
         thr.join();
+    auto end = std::chrono::steady_clock::now();
+    auto span = end - start;
+
+    // each thread marks 5 per interval and there are n threads in a loop of 20
+    auto total_iterations = loopcnt * threads.size();
+    auto total_marks = 5 * total_iterations;
+    auto actual = (std::chrono::seconds(1) * total_marks) / span;
 
     // note to reader: this is not a benchmark. This is just a sanity check for a 10ms windowed ewma
-    INFO(rate << " (" << (rate * 100) << " marks per second)");
+    INFO("Reported: " << rate << " (" << (rate * 1000) << " marks per second), Actual: " << actual << " marks per second");
     REQUIRE(rate >= 5.0);
 }
 
 TEST_CASE("EWMA calculates after jump past window", "[ewma]")
 {
-    int clock = 1;
-    mock_ewma e(10, 1, clock);
+    unsigned clock = 1;
+    mock_ewma<10, 1> e(clock);
 
     for (int i = 0; i <= 10; i++)
     {
@@ -91,8 +103,8 @@ TEST_CASE("EWMA calculates after jump past window", "[ewma]")
 
 TEST_CASE("EWMA calculates after jump in window", "[ewma]")
 {
-    int clock = 1;
-    mock_ewma e(10, 1, clock);
+    unsigned clock = 1;
+    mock_ewma<10, 1> e(clock);
 
     for (int i = 0; i <= 100; i++)
     {

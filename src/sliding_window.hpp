@@ -15,7 +15,7 @@ class timed_data
 {
 
 public:
-    using clock_point = typename ewma<TClockGet>::clock_point;
+    using clock_point = typename clock_traits<TClockGet>::clock_point;
 
     timed_data() noexcept;
 
@@ -141,7 +141,7 @@ public:
     /**
      * \brief the type of data that the sliding window is represented in based on the clock 'functor'
      */
-    using window_type = typename internal::ewma<TClockGet>::clock_diff;
+    using window_type = typename internal::clock_traits<TClockGet>::clock_diff;
     using value_type = TElem;
 private:
 

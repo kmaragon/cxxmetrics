@@ -7,17 +7,17 @@
 
 struct mock_clock
 {
-    mock_clock(int &ref) : value_(ref)
+    mock_clock(unsigned &ref) : value_(ref)
     {
     }
 
-    int operator()() const
+    unsigned operator()() const
     {
         return value_;
     }
 
 private:
-    int &value_;
+    unsigned &value_;
 };
 
 #endif //CXXMETRICS_HELPERS_HPP

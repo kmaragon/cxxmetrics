@@ -39,10 +39,10 @@ TEST_CASE("Meter initializes correctly", "[meter]")
 
 TEST_CASE("Meter rates are passed on", "[meter]")
 {
-    int clock = 1;
+    unsigned clock = 1;
     mock_clock clk(clock);
 
-    internal::_meter_impl<mock_clock, 1, 8, 20, 50> m(1, clk);
+    internal::_meter_impl<mock_clock, 1, 1, 8, 20, 50> m(clk);
 
     for(int i = 0; i < 100; i++)
     {
@@ -50,20 +50,19 @@ TEST_CASE("Meter rates are passed on", "[meter]")
         clock++;
     }
 
-    REQUIRE(round(m.template get_rate<1>()) == 10);
-    REQUIRE(round(m.template get_rate<8>()) == 10);
-    REQUIRE(round(m.template get_rate<20>()) == 10);
-    REQUIRE(round(m.template get_rate<50>()) == 10);
+    REQUIRE(round(m.get_rate<1>()) == 10);
+    REQUIRE(round(m.get_rate<8>()) == 10);
+    REQUIRE(round(m.get_rate<20>()) == 10);
+    REQUIRE(round(m.get_rate<50>()) == 10);
     REQUIRE(round(m.mean()) == 10);
 
     clock += 10;
     m.mark(100);
     clock += 1;
-    m.mark(0);
 
-    REQUIRE(m.template get_rate<1>() > m.template get_rate<8>());
-    REQUIRE(m.template get_rate<8>() > m.template get_rate<20>());
-    REQUIRE(m.template get_rate<20>() > m.template get_rate<50>());
+    REQUIRE(m.get_rate<1>() > m.get_rate<8>());
+    REQUIRE(m.get_rate<8>() > m.get_rate<20>());
+    REQUIRE(m.get_rate<20>() > m.get_rate<50>());
     REQUIRE_THAT(m.mean(), Catch::WithinULP(1100.0 / 111.0, 1));
 }
 

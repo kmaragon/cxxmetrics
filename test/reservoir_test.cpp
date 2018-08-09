@@ -76,7 +76,7 @@ TEST_CASE("Simple Reservoir overflow", "[reservoir]")
 
 TEST_CASE("Sliding Window Reservoir only gets window data", "[reservoir]")
 {
-    int time = 500;
+    unsigned time = 500;
     mock_clock clk(time);
 
     sliding_window_reservoir<double, 10, mock_clock> r(100, clk);

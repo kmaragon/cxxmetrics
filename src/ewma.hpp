@@ -48,10 +48,9 @@ inline void atomic_add(std::atomic<TA>& a, const TB& b)
     add(a, b);
 }
 
-template<typename TClockGet, typename TValue = double>
-class ewma
+template<typename TClockGet>
+class clock_traits
 {
-    static_assert(std::is_arithmetic<TValue>::value, "ewma can only be applied to integral and floating point values");
     static auto clk_point_()
     {
         TClockGet *clk;
@@ -62,28 +61,36 @@ class ewma
     {
         return clk_point_() - clk_point_();
     }
+public:
+    using clock_point = typename std::decay<decltype(clk_point_())>::type;
+    using clock_diff = typename std::decay<decltype(clk_diff_())>::type;
+};
+
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue = double>
+class ewma
+{
+    static_assert(std::is_arithmetic<TValue>::value, "ewma can only be applied to integral and floating point values");
 
 public:
-    using clock_point = typename std::decay<decltype(ewma<TClockGet, TValue>::clk_point_())>::type;
-    using clock_diff = typename std::decay<decltype(ewma<TClockGet, TValue>::clk_diff_())>::type;
+    using clock_point = typename clock_traits<TClockGet>::clock_point;
+    using clock_diff = typename clock_traits<TClockGet>::clock_diff;
+
 private:
     TClockGet clk_;
-    double alpha_;
-    clock_diff interval_;
-    clock_diff window_;
+    static long double alpha_;
     std::atomic<TValue> rate_;
     clock_point last_;
     std::atomic<TValue> pending_;
 
-    static double get_alpha(const clock_diff &interval, const clock_diff &window)
+    static constexpr double get_alpha()
     {
-        return 1 - exp((interval * -1.0) / window);
+        return 1 - exp((TInterval * -1.0l) / (TWindow * 1.0l));
     }
 
     void tick(const clock_point &at) noexcept;
 
 public:
-    ewma(const clock_diff &window, const clock_diff &interval, const TClockGet &clock = TClockGet()) noexcept;
+    ewma(const TClockGet &clock = TClockGet()) noexcept;
     ewma(const ewma &e) noexcept;
     ~ewma() = default;
 
@@ -96,28 +103,25 @@ public:
 
     TValue rate() const noexcept;
 
-    ewma &operator=(const ewma<TClockGet, TValue> &c) noexcept;
+    ewma &operator=(const ewma<TClockGet, TWindow, TInterval, TValue> &c) noexcept;
 
 };
 
-template<typename TClockGet, typename TValue>
-ewma<TClockGet, TValue>::ewma(const clock_diff &window, const clock_diff &interval, const TClockGet &clock) noexcept :
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+long double ewma<TClockGet, TWindow, TInterval, TValue>::alpha_ = ewma<TClockGet, TWindow, TInterval, TValue>::get_alpha();
+
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+ewma<TClockGet, TWindow, TInterval, TValue>::ewma(const TClockGet &clock) noexcept :
         clk_(clock),
-        alpha_(get_alpha(interval, window)),
-        interval_(interval),
-        window_(window),
         rate_(0),
         last_{},
         pending_(0)
 {
 }
 
-template<typename TClockGet, typename TValue>
-ewma<TClockGet, TValue>::ewma(const ewma<TClockGet, TValue> &c) noexcept :
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+ewma<TClockGet, TWindow, TInterval, TValue>::ewma(const ewma &c) noexcept :
     clk_(c.clk_),
-    alpha_(c.alpha_),
-    interval_(c.interval_),
-    window_(c.window_),
     rate_(c.rate_.load()),
     last_(c.last_),
     pending_(c.pending_.load())
@@ -125,9 +129,9 @@ ewma<TClockGet, TValue>::ewma(const ewma<TClockGet, TValue> &c) noexcept :
 
 }
 
-template<typename TClockGet, typename TValue>
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
 template<typename TMark>
-void ewma<TClockGet, TValue>::mark(TMark amount) noexcept
+void ewma<TClockGet, TWindow, TInterval, TValue>::mark(TMark amount) noexcept
 {
     auto now = clk_();
 
@@ -138,7 +142,7 @@ void ewma<TClockGet, TValue>::mark(TMark amount) noexcept
     // See if we crossed the interval threshold. If so we need to tick
     if (last_ != clock_point{})
     {
-        if ((now - last_) >= interval_)
+        if ((now - last_) >= period(TInterval))
             tick(now);
         atomic_add(pending_, amount);
     }
@@ -151,30 +155,26 @@ void ewma<TClockGet, TValue>::mark(TMark amount) noexcept
 
 }
 
-template<typename TClockGet, typename TValue>
-bool ewma<TClockGet, TValue>::compare_exchange(TValue &expectedrate, TValue rate) noexcept
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+bool ewma<TClockGet, TWindow, TInterval, TValue>::compare_exchange(TValue &expectedrate, TValue rate) noexcept
 {
     return rate_.compare_exchange_weak(expectedrate, rate);
 }
 
-template<typename TClockGet, typename TValue>
-TValue ewma<TClockGet, TValue>::rate() noexcept
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+TValue ewma<TClockGet, TWindow, TInterval, TValue>::rate() noexcept
 {
     auto now = clk_();
 
     // See if we crossed the interval threshold. If so we need to tick
-    if (last_ != clock_point{} && now > last_ && (now - last_) >= interval_)
+    if (last_ != clock_point{} && now > last_ && (now - last_) >= period(TInterval))
         tick(now);
 
-    auto rate = rate_.load();
-    if (rate < 0)
-        return 0;
-
-    return rate;
+    return rate_.load();
 }
 
-template<typename TClockGet, typename TValue>
-TValue ewma<TClockGet, TValue>::rate() const noexcept
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+TValue ewma<TClockGet, TWindow, TInterval, TValue>::rate() const noexcept
 {
     auto rate = rate_.load();
     if (rate < 0)
@@ -183,32 +183,30 @@ TValue ewma<TClockGet, TValue>::rate() const noexcept
     return rate;
 }
 
-template<typename TClockGet, typename TValue>
-void ewma<TClockGet, TValue>::tick(const clock_point &at) noexcept
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+void ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) noexcept
 {
     int missed_intervals;
     clock_point last;
 
     auto pending = pending_.load();
 
-cxxmetrics_ewma_startover:
     auto nrate = rate_.load();
     last = last_;
     if (last == clock_point{})
     {
         // one thread sets the last timestamp
-        if (!pending_.compare_exchange_weak(pending, 0))
-            goto cxxmetrics_ewma_startover;
+        if (!pending_.compare_exchange_strong(pending, 0))
+            return; // someone else ticked from under us
 
         if (rate_.compare_exchange_weak(nrate, pending))
-        {
             last_ = at;
-            return;
-        }
+
+        return;
     }
 
     // make sure that last_ didn't catch up with us
-    if ((at - last) < interval_)
+    if ((at - last) < period(TInterval))
         return;
 
     // apply the pending value to our current rate
@@ -216,40 +214,38 @@ cxxmetrics_ewma_startover:
     auto rate = nrate + (alpha_ * (pending - nrate));
 
     // figure out how many intervals we've missed
-    missed_intervals = ((at - last) / interval_) - 1;
-
+    missed_intervals = ((at - last) / period(TInterval)) - 1;
     if (missed_intervals)
     {
         // we missed some intervals - we'll average in zeros
-        if ((at - last) > window_)
+        if ((at - last) > period(TWindow))
         {
-            while ((at - last) > window_)
+            while ((at - last) > period(TWindow))
             {
                 rate = sqrt(rate);
-                last += window_;
+                last += period(TWindow);
             }
 
             // figure out the missed intervals now
-            missed_intervals = ((at - last) / interval_) - 1;
+            missed_intervals = ((at - last) / period(TInterval)) - 1;
         }
 
         for (int i = 0; i < missed_intervals; i++)
             rate = rate + (alpha_ * -rate);
     }
 
-    if (!pending_.compare_exchange_weak(pending, 0))
-        goto cxxmetrics_ewma_startover;
+    if (!pending_.compare_exchange_strong(pending, 0))
+        return; // someone else already either ticked or added a pending value
 
     rate_.store(rate);
-    last_ = at;
+    if (last_ < at)
+        last_ = at;
 }
 
-template<typename TClockGet, typename TValue>
-ewma<TClockGet, TValue> &ewma<TClockGet, TValue>::operator=(const ewma<TClockGet, TValue> &c) noexcept
+template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
+ewma<TClockGet, TWindow, TInterval, TValue> &ewma<TClockGet, TWindow, TInterval, TValue>::operator=(const ewma &c) noexcept
 {
     alpha_ = c.alpha_;
-    interval_ = c.interval_;
-    window_ = c.window_;
     rate_.store(c.rate_.load());
     pending_.store(c.pending_.load());
     last_ = c.last_;
@@ -275,7 +271,7 @@ struct steady_clock_point
 template<period::value TWindow, period::value TInterval = time::seconds(1), typename TValue = double>
 class ewma : public metric<ewma<TWindow, TInterval, TValue>>
 {
-    internal::ewma<steady_clock_point, TValue> ewma_;
+    internal::ewma<steady_clock_point, TWindow, TInterval, TValue> ewma_;
 public:
     /**
      * \brief Construct an exponential weighted moving average
@@ -283,10 +279,7 @@ public:
      * \param window The window over which the average accounts for
      * \param interval The interval at which the average is calculated
      */
-    ewma() noexcept :
-            ewma_(period(TWindow), period(TInterval))
-    { }
-
+    ewma() noexcept = default;
     ewma(const ewma &ewma) noexcept = default;
 
     ewma &operator=(const ewma &e) noexcept = default;

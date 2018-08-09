@@ -51,8 +51,37 @@ public:
     {
         return to_duration();
     }
-
 };
+
+template<typename TRep, typename TPer>
+inline bool operator>(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a > b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline bool operator>=(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a >= b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline bool operator<(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a < b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline bool operator<=(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a <= b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline auto operator/(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a / b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline auto operator*(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a * b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline auto operator+(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a + b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline auto operator-(const std::chrono::duration<TRep, TPer>& a, const period& b) { return a - b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline auto operator+=(std::chrono::duration<TRep, TPer>& a, const period& b) { return a += b.to_duration(); }
+
+template<typename TRep, typename TPer>
+inline auto operator-=(std::chrono::duration<TRep, TPer>& a, const period& b) { return a -= b.to_duration(); }
 
 namespace time
 {

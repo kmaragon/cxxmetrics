@@ -178,13 +178,18 @@ TEST_CASE("Registry meter aggregation", "[metrics_registry]")
 {
     metrics_registry<> subject;
 
-    constexpr period interval = 50_micro;
+    constexpr period interval = 100_micro;
 
-    auto& m1 = subject.meter<interval, 1_min, 5_min, 1_hour>("meter1"_m);
-    auto& m2 = subject.meter<interval, 1_min, 5_min, 1_hour>("meter1"_m, {{"mytag","tagvalue"}});
-    auto& m3 = subject.meter<interval, 1_min, 5_min, 1_hour>("meter1"_m, {{"mytag","tagvalue2"}});
+    auto& m1 = subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m);
+    auto& m2 = subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m, {{"mytag","tagvalue"}});
+    auto& m3 = subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m, {{"mytag","tagvalue2"}});
 
-    for (int i = 0; i < 10; i++)
+    metric_value mean(0);
+    metric_value m50(0);
+    metric_value m100(0);
+    metric_value m200(0);
+
+    for (int i = 0; i < 100; i++)
     {
         std::this_thread::sleep_for(interval.to_duration());
         m1.mark(1000);
@@ -192,29 +197,25 @@ TEST_CASE("Registry meter aggregation", "[metrics_registry]")
         m3.mark(18000);
     }
 
-    metric_value mean(0);
-    metric_value m100(0);
-    metric_value m200(0);
-    metric_value m500(0);
-
     subject.visit_registered_metrics([&](const metric_path& path, basic_registered_metric& metric) {
         metric.aggregate([&](const meter_snapshot& ctr) {
             mean = ctr.value();
             for (const auto& p : ctr)
             {
-                if (p.first == 1min)
+                if (p.first == 50ms)
+                    m50 = (double)p.second;
+                else if (p.first == 100ms)
                     m100 = (double)p.second;
-                else if (p.first == 5min)
+                else if (p.first == 200ms)
                     m200 = (double)p.second;
-                else if (p.first == 1h)
-                    m500 = (double)p.second;
             }
         });
     });
 
-    INFO("Mean = " << mean << ", m100 = " << m100 << ", m200 = " << m200 << ", m500 = " << m500);
+    WARN("Mean = " << mean << ", m50 = " << m50 << ", m100 = " << m100 << ", m200 = " << m200);
 
-    REQUIRE(round(m100) == 9000);
-    REQUIRE(round(m200) == 9000);
-    REQUIRE(round(m500) == 9000);
+    // with the overhead of other stuff happening, the rate won't quite bit 9000
+    REQUIRE(round(m50 / metric_value(100.0)) == 90);
+    REQUIRE(round(m100 / metric_value(100.0)) == 90);
+    REQUIRE(round(m200 / metric_value(100.0)) == 90);
 }

@@ -34,13 +34,13 @@ struct meter_rate
 namespace internal
 {
 
-template<typename TClockGet, period::value TWindow>
+template<typename TClockGet, period::value TWindow, period::value TInterval>
 class rate_counter
 {
-    ewma<TClockGet> rate_;
+    ewma<TClockGet, TWindow, TInterval, double> rate_;
 public:
-    rate_counter(const TClockGet &clock, const typename ewma<TClockGet>::clock_diff &interval) noexcept :
-            rate_(period(TWindow), interval, clock)
+    rate_counter(const TClockGet &clock) noexcept :
+            rate_(clock)
     {
     }
 
@@ -68,7 +68,7 @@ public:
     }
 };
 
-template<typename TClockGet, period::value... TWindow>
+template<typename TClockGet, period::value TInterval, period::value... TWindow>
 class rates_holder
 {
     template<period::value TValue, int TStart, period::value ...TPeriods>
@@ -91,7 +91,7 @@ class rates_holder
     template<period::value ...TPeriods>
     struct marker
     {
-        static constexpr void mark(rates_holder<TClockGet, TWindow...> *c, int64_t value)
+        static constexpr void mark(rates_holder<TClockGet, TInterval, TWindow...> *c, int64_t value)
         {
         }
     };
@@ -100,17 +100,17 @@ class rates_holder
     struct marker<TPeriod, TPeriods...>
     {
         static constexpr marker<TPeriods...> inner_ = marker<TPeriods...>();
-        static constexpr void mark(rates_holder<TClockGet, TWindow...> *c, int64_t value)
+        static constexpr void mark(rates_holder<TClockGet, TInterval, TWindow...> *c, int64_t value)
         {
             c->get_rate<TPeriod>().mark(value);
             inner_.mark(c, value);
         }
     };
 
-    std::tuple<rate_counter<TClockGet, TWindow>...> rates_;
+    std::tuple<rate_counter<TClockGet, TWindow, TInterval>...> rates_;
 public:
-    rates_holder(const TClockGet &clock, const typename ewma<TClockGet>::clock_diff &interval) :
-        rates_(rate_counter<TClockGet, TWindow>{clock, interval}...)
+    rates_holder(const TClockGet &clock) :
+        rates_(rate_counter<TClockGet, TWindow, TInterval>{clock}...)
     {
     }
 
@@ -145,24 +145,24 @@ public:
     }
 };
 
-template<typename TClockGet, period::value ... TWindows>
+template<typename TClockGet, period::value TInterval, period::value ... TWindows>
 class _meter_impl_base
 {
 public:
-    using clock_point = typename ewma<TClockGet>::clock_point;
-    using clock_diff = typename ewma<TClockGet>::clock_diff;
+    using clock_point = typename clock_traits<TClockGet>::clock_point;
+    using clock_diff = typename clock_traits<TClockGet>::clock_diff;
 
-    rates_holder<TClockGet, TWindows...> rates_;
+    rates_holder<TClockGet, TInterval, TWindows...> rates_;
 
 private:
     template<period::value... TPeriods>
     struct each_fn
     {
-        constexpr void doeach(_meter_impl_base<TClockGet, TWindows...> &on, const auto &fn)
+        constexpr void doeach(_meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
         {
         }
 
-        constexpr void doeach(const _meter_impl_base<TClockGet, TWindows...> &on, const auto &fn)
+        constexpr void doeach(const _meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
         {
         }
     };
@@ -171,26 +171,24 @@ private:
     struct each_fn<TCur, TPeriods...>
     {
         each_fn<TPeriods...> next;
-        constexpr void doeach(_meter_impl_base<TClockGet, TWindows...> &on, const auto &fn)
+        constexpr void doeach(_meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
         {
-            fn(meter_rate(period(TCur), on.get_rate<TCur>()));
+            fn(meter_rate(period(TCur).to_duration(), on.get_rate<TCur>()));
             next.doeach(on, fn);
         }
 
-        constexpr void doeach(const _meter_impl_base<TClockGet, TWindows...> &on, const auto &fn)
+        constexpr void doeach(const _meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
         {
-            fn(meter_rate(period(TCur), on.get_rate<TCur>()));
+            fn(meter_rate(period(TCur).to_duration(), on.get_rate<TCur>()));
             next.doeach(on, fn);
         }
     };
 
     TClockGet clk_;
-    clock_diff interval_;
 public:
-    explicit _meter_impl_base(const clock_diff &interval, const TClockGet &clkget) noexcept :
-            rates_(clkget, interval),
-            clk_(clkget),
-            interval_(interval)
+    explicit _meter_impl_base(const TClockGet &clkget) noexcept :
+            rates_(clkget),
+            clk_(clkget)
     { }
 
     _meter_impl_base(const _meter_impl_base &b) noexcept = default;
@@ -227,7 +225,7 @@ public:
 protected:
     constexpr clock_diff interval() const noexcept
     {
-        return interval_;
+        return period(TInterval);
     }
 
     clock_point now() const noexcept
@@ -237,21 +235,21 @@ protected:
 };
 
 // specialization for track rate mean
-template<typename TClockGet, period::value ...TWindows>
-class _meter_impl : public _meter_impl_base<TClockGet, TWindows...>
+template<typename TClockGet, period::value TInterval, period::value ...TWindows>
+class _meter_impl : public _meter_impl_base<TClockGet, TInterval, TWindows...>
 {
-    using clock_point = typename _meter_impl_base<TClockGet>::clock_point;
+    using clock_point = typename clock_traits<TClockGet>::clock_point;
     clock_point start_;
     std::atomic_int_fast64_t total_;
 public:
-    explicit _meter_impl(const typename ewma<TClockGet>::clock_diff &interval, const TClockGet &clkget) noexcept :
-            _meter_impl_base<TClockGet, TWindows...>(interval, clkget),
+    explicit _meter_impl(const TClockGet &clkget) noexcept :
+            _meter_impl_base<TClockGet, TInterval, TWindows...>(clkget),
             start_{},
             total_(0)
     { }
 
     _meter_impl(const _meter_impl &c) noexcept :
-            _meter_impl_base<TClockGet, TWindows...>(c),
+            _meter_impl_base<TClockGet, TInterval, TWindows...>(c),
             start_(c.start_),
             total_(c.total_.load())
     {
@@ -260,7 +258,7 @@ public:
 
     _meter_impl &operator=(const _meter_impl &c) noexcept
     {
-        _meter_impl_base<TClockGet, TWindows...>::operator=(c);
+        _meter_impl_base<TClockGet, TInterval, TWindows...>::operator=(c);
         start_ = c.start_;
         total_.store(c.total_.load());
 
@@ -269,8 +267,8 @@ public:
 
     inline double mean() const noexcept
     {
-        auto since = _meter_impl_base<TClockGet, TWindows...>::now() - start_;
-        auto units = since / _meter_impl_base<TClockGet, TWindows...>::interval();
+        auto since = this->now() - start_;
+        auto units = (since * 1.0l) / this->interval();
         if (start_ == clock_point{})
             units = 1;
         if (!units)
@@ -282,8 +280,9 @@ public:
     {
         // this will be imperfect but it should be close enough
         if (start_ == clock_point{})
-            start_ = _meter_impl_base<TClockGet, TWindows...>::now();
-        _meter_impl_base<TClockGet, TWindows...>::mark(by);
+            start_ = this->now();
+
+        _meter_impl_base<TClockGet, TInterval, TWindows...>::mark(by);
         total_ += by;
     }
 };
@@ -298,7 +297,7 @@ template<period::value TInterval, period::value ...TWindows>
 class meter : public metric<meter<TInterval, TWindows...>>
 {
 protected:
-    internal::_meter_impl<steady_clock_point, TWindows...> impl_;
+    internal::_meter_impl<steady_clock_point, TInterval, TWindows...> impl_;
     meter() noexcept;
 
     struct map_builder
@@ -409,7 +408,7 @@ public:
 
 template<period::value TInterval, period::value ...TWindows>
 meter<TInterval, TWindows...>::meter() noexcept :
-    impl_(period(TInterval), steady_clock_point())
+    impl_(steady_clock_point())
 { }
 
 template<period::value TInterval, typename TWindows>
