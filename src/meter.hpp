@@ -378,7 +378,7 @@ public:
     /**
      * \brief Get the mean rate of the meter over the lifespan of tracking
      *
-     * @return The meter's lifetime mean
+     * \return The meter's lifetime mean
      */
     double mean() const noexcept
     {
@@ -429,7 +429,7 @@ public:
 /**
  * \brief A meter that tracks the lifetime mean along with the rates specified in the template parameters
  *
- * @tparam TWindows The various time windows to track. For example '15_min'
+ * \tparam TWindows The various time windows to track. For example '15_min'
  */
 template<period::value TInterval, period::value... TWindows>
 class meter : public meters::meter_builder<TInterval, typename templates::sort_unique<TWindows...>::type>

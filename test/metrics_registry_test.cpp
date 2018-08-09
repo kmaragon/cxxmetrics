@@ -12,8 +12,8 @@ using namespace cxxmetrics_literals;
 TEST_CASE("Registry retreiving same type works", "[metrics_registry]")
 {
     metrics_registry<> subject;
-    auto* counter = &subject.counter("MyCounter");
-    auto* regot = &subject.counter("MyCounter");
+    auto* counter = subject.counter("MyCounter").get();
+    auto* regot = subject.counter("MyCounter").get();
     REQUIRE(counter == regot);
 }
 
@@ -27,8 +27,8 @@ TEST_CASE("Registry retrieving path with wrong type throws", "[metrics_registry]
 TEST_CASE("Registry retrieving path with different tags", "[metrics_registry]")
 {
     metrics_registry<> subject;
-    auto* counter = &subject.counter("MyCounter");
-    auto* regot = &subject.counter("MyCounter", {{"mytag","tagvalue"}});
+    auto* counter = subject.counter("MyCounter").get();
+    auto* regot = subject.counter("MyCounter", {{"mytag","tagvalue"}}).get();
     REQUIRE(counter != regot);
 }
 
@@ -46,8 +46,8 @@ TEST_CASE("Registry visitor visits counters", "[metrics_registry]")
     int total = 0;
 
     metrics_registry<> subject;
-    subject.counter("MyCounter") += 10;
-    subject.counter("MyCounter", {{"mytag","tagvalue"}}) += 45;
+    *subject.counter("MyCounter") += 10;
+    *subject.counter("MyCounter", {{"mytag","tagvalue"}}) += 45;
 
     subject.visit_registered_metrics([&total, &names, &instances](const metric_path& path, basic_registered_metric& metric) {
         ++names;
@@ -78,7 +78,7 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
     int gaugeProvider = 7;
 
     metrics_registry<> subject;
-    subject.counter("MyCounter");
+    auto myCounter = subject.counter("MyCounter");
     subject.ewma<1_min>("averages"_m/"MyEWMA"/"P2");
     subject.gauge("Gauge"_m/"Other", gaugeProvider);
     subject.histogram("H"_m/"istogramS", simple_reservoir<long, 100>());
@@ -87,6 +87,7 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
     subject.meter<1_sec, 1_min, 1_sec, 5_min>("Meter");
     subject.timer<1_sec, std::chrono::system_clock, simple_reservoir<typename std::chrono::system_clock::duration, 1024>, 1_min, 5_min>("TimerVerbose");
     subject.timer<1_sec, uniform_reservoir, 1024, 1_min, 5_min>("TimerSimpler");
+    REQUIRE(subject.register_existing("MyCounter"_m/"Alias", myCounter));
 
     subject.visit_registered_metrics([&instances, &names](const metric_path& path, basic_registered_metric& metric) {
         ++names;
@@ -95,7 +96,7 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
         });
     });
 
-    REQUIRE(names == 9);
+    REQUIRE(names == 10);
     REQUIRE(instances == names);
 
     names = 0;
@@ -112,9 +113,9 @@ TEST_CASE("Registry average aggregation", "[metrics_registry]")
 {
     metrics_registry<> subject;
 
-    auto& e1 = subject.ewma<1_min, 50_micro>("emwa1");
-    auto& e2 = subject.ewma<1_min, 50_micro>("emwa1", {{"mytag","tagvalue"}});
-    auto& e3 = subject.ewma<1_min, 50_micro>("emwa1", {{"mytag","tagvalue2"}});
+    auto& e1 = *subject.ewma<1_min, 50_micro>("emwa1");
+    auto& e2 = *subject.ewma<1_min, 50_micro>("emwa1", {{"mytag","tagvalue"}});
+    auto& e3 = *subject.ewma<1_min, 50_micro>("emwa1", {{"mytag","tagvalue2"}});
 
     for (int i = 0; i < 20; i++)
     {
@@ -138,9 +139,9 @@ TEST_CASE("Registry histogram aggregation", "[metrics_registry]")
 {
     metrics_registry<> subject;
 
-    auto& h1 = subject.histogram("histogram", simple_reservoir<int64_t, 100>());
-    auto& h2 = subject.histogram("histogram"_m, simple_reservoir<int64_t, 100>(), {{"mytag","tagvalue"}});
-    auto& h3 = subject.histogram("histogram"_m, simple_reservoir<int64_t, 100>(), {{"mytag","tagvalue2"}});
+    auto& h1 = *subject.histogram("histogram", simple_reservoir<int64_t, 100>());
+    auto& h2 = *subject.histogram("histogram"_m, simple_reservoir<int64_t, 100>(), {{"mytag","tagvalue"}});
+    auto& h3 = *subject.histogram("histogram"_m, simple_reservoir<int64_t, 100>(), {{"mytag","tagvalue2"}});
 
     for (int i = 1; i <= 100; i++)
     {
@@ -180,9 +181,9 @@ TEST_CASE("Registry meter aggregation", "[metrics_registry]")
 
     constexpr period interval = 100_micro;
 
-    auto& m1 = subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m);
-    auto& m2 = subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m, {{"mytag","tagvalue"}});
-    auto& m3 = subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m, {{"mytag","tagvalue2"}});
+    auto& m1 = *subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m);
+    auto& m2 = *subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m, {{"mytag","tagvalue"}});
+    auto& m3 = *subject.meter<interval, 50_msec, 100_msec, 200_msec>("meter1"_m, {{"mytag","tagvalue2"}});
 
     metric_value mean(0);
     metric_value m50(0);

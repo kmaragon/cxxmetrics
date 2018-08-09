@@ -78,7 +78,7 @@ public:
      *
      * \tparam TInputIterator The type of iterator
      * \param start The start of the iterator
-     * @param end The end of the iterator
+     * \param end The end of the iterator
      */
     template<typename TInputIterator>
     ringbuf(TInputIterator &start, const TInputIterator &end) noexcept;
@@ -123,14 +123,14 @@ public:
 
     /**
      * \brief
-     * @param elem
+     * \param elem
      */
     void push(const TElemType &elem) noexcept;
 
     /**
      * \brief Get the size of the ring buffer
      *
-     * @return the size of the ring buffer
+     * \return the size of the ring buffer
      */
     size_t size() const noexcept;
 

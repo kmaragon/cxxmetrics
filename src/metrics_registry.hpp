@@ -100,14 +100,29 @@ class basic_registered_metric
     std::string type_;
 
     template<typename TMetricType, typename... TConstructorArgs>
-    TMetricType& tagged(const tag_collection& tags, TConstructorArgs&&... args)
+    std::shared_ptr<TMetricType> tagged(const tag_collection& tags, TConstructorArgs&&... args)
     {
-        auto builder = [&]() -> TMetricType {
-            return TMetricType(std::forward<TConstructorArgs>(args)...);
+        auto builder = [&]() -> std::shared_ptr<TMetricType> {
+            return std::make_shared<TMetricType>(std::forward<TConstructorArgs>(args)...);
         };
 
         invokable_metric_builder<typename std::decay<decltype(builder)>::type> metricbuilder(std::move(builder));
-        return *static_cast<TMetricType*>(this->child(tags, &metricbuilder));
+        return std::static_pointer_cast<TMetricType>(this->child(tags, &metricbuilder));
+    }
+
+    template<typename TMetricType>
+    bool add_existing(const tag_collection& tags, std::shared_ptr<TMetricType>&& metric)
+    {
+        bool added = false;
+        auto builder = [&]() -> std::shared_ptr<TMetricType> {
+            added = true;
+            return std::move(metric);
+        };
+
+        invokable_metric_builder<typename std::decay<decltype(builder)>::type> metricbuilder(std::move(builder));
+        std::static_pointer_cast<TMetricType>(this->child(tags, &metricbuilder));
+
+        return added;
     }
 
     template<typename TRepository>
@@ -117,11 +132,11 @@ protected:
     struct basic_metric_builder
     {
         virtual ~basic_metric_builder() = default;
-        virtual TMetricType build() = 0;
+        virtual std::shared_ptr<TMetricType> build() = 0;
     };
 
     template<typename TBuilder>
-    class invokable_metric_builder final : public basic_metric_builder<decltype(std::declval<TBuilder>()())>
+    class invokable_metric_builder final : public basic_metric_builder<typename decltype(std::declval<TBuilder>()())::element_type>
     {
         TBuilder builder_;
     public:
@@ -137,7 +152,7 @@ protected:
 
     virtual void visit_each(internal::registered_snapshot_visitor_builder& builder) = 0;
     virtual void aggregate_all(snapshot_visitor& visitor) = 0;
-    virtual internal::metric* child(const tag_collection& tags, void* metricbuilder) = 0;
+    virtual std::shared_ptr<internal::metric> child(const tag_collection& tags, void* metricbuilder) = 0;
 
 public:
     basic_registered_metric(const std::string& type) :
@@ -185,18 +200,18 @@ public:
 /**
  * \brief the specialized root metric that will be the real types registered in the repository
  *
- * @tparam TMetricType the type of metric registered in the repository
+ * \tparam TMetricType the type of metric registered in the repository
  */
 template<typename TMetricType>
 class registered_metric : public basic_registered_metric
 {
-    std::unordered_map<tag_collection, TMetricType> metrics_;
+    std::unordered_map<tag_collection, std::shared_ptr<TMetricType>> metrics_;
     std::mutex lock_;
 
 protected:
     void visit_each(internal::registered_snapshot_visitor_builder& builder) override;
     void aggregate_all(snapshot_visitor& visitor) override;
-    internal::metric* child(const tag_collection& tags, void* metricbuilder) override;
+    std::shared_ptr<internal::metric> child(const tag_collection& tags, void* metricbuilder) override;
 
 public:
     registered_metric(const std::string& metric_type_name) :
@@ -218,7 +233,7 @@ void registered_metric<TMetricType>::visit_each(cxxmetrics::internal::registered
         builder.construct(loc, p.first);
         try
         {
-            loc->visit(p.second.snapshot());
+            loc->visit(p.second->snapshot());
         }
         catch (...)
         {
@@ -239,10 +254,10 @@ void registered_metric<TMetricType>::aggregate_all(snapshot_visitor &visitor)
     if (itr == metrics_.end())
         return;
 
-    auto result = itr->second.snapshot();
+    auto result = itr->second->snapshot();
     for (++itr; itr != metrics_.end(); ++itr)
     {
-        result.merge(itr->second.snapshot());
+        result.merge(itr->second->snapshot());
     }
 
     lock.unlock();
@@ -250,15 +265,16 @@ void registered_metric<TMetricType>::aggregate_all(snapshot_visitor &visitor)
 }
 
 template<typename TMetricType>
-internal::metric* registered_metric<TMetricType>::child(const cxxmetrics::tag_collection &tags, void* metricbuilder)
+std::shared_ptr<internal::metric> registered_metric<TMetricType>::child(const cxxmetrics::tag_collection &tags, void* metricbuilder)
 {
     std::lock_guard<std::mutex> lock(lock_);
     auto res = metrics_.find(tags);
 
     if (res != metrics_.end())
-        return &res->second;
+        return std::static_pointer_cast<internal::metric>(res->second);
 
-    return &metrics_.emplace(tags, static_cast<basic_metric_builder<TMetricType>*>(metricbuilder)->build()).first->second;
+    return std::static_pointer_cast<internal::metric>(
+            metrics_.emplace(tags, static_cast<basic_metric_builder<TMetricType>*>(metricbuilder)->build()).first->second);
 }
 
 /**
@@ -278,6 +294,10 @@ public:
     template<typename THandler>
     void visit(THandler&& handler);
 
+    const tag_collection& tags(const tag_collection& tags) const
+    {
+        return tags;
+    }
 };
 
 template<typename TAlloc>
@@ -321,7 +341,7 @@ class metrics_registry
     registered_metric<TMetricType>& get(const metric_path& path);
 
     template<typename TMetricType, typename... TConstructorArgs>
-    TMetricType& get(const metric_path& path, const tag_collection& tags, TConstructorArgs&&... args);
+    std::shared_ptr<TMetricType> get(const metric_path& path, const tag_collection& tags, TConstructorArgs&&... args);
 
 public:
     /**
@@ -354,6 +374,22 @@ public:
     void visit_registered_metrics(THandler&& handler);
 
     /**
+     * \brief Register an existing metric in the registry (perhaps one obtained from another registry)
+     *
+     * \throws metric_type_mismatch if there is already a registered metric at the path of a different type
+     *
+     * \tparam TMetric the metric type to register
+     *
+     * \param name the name of the metric to register
+     * \param metric the metric to register
+     * \param tags the tags for the permutation being registered
+     *
+     * \return true if the metric was registered at the path or false if there was already a metric there
+     */
+    template<typename TMetric>
+    bool register_existing(const metric_path& name, std::shared_ptr<TMetric> metric, const tag_collection& tags = tag_collection());
+
+    /**
      * \brief Get the registered counter or register a new one with the given path and tags
      *
      * \throws metric_type_mismatch if there is already a registered metric at the path of a different type
@@ -367,13 +403,13 @@ public:
      * \return the counter at the path specified with the tags specified
      */
     template<typename TCount = int64_t>
-    cxxmetrics::counter<TCount>& counter(const metric_path& name, TCount&& initialValue, const tag_collection& tags = tag_collection());
+    std::shared_ptr<cxxmetrics::counter<TCount>> counter(const metric_path& name, TCount&& initialValue, const tag_collection& tags = tag_collection());
 
     /**
      * \brief Another overload for getting a counter without an initial value
      */
     template<typename TCount = int64_t>
-    cxxmetrics::counter<TCount>& counter(const metric_path& name, const tag_collection& tags = tag_collection())
+    std::shared_ptr<cxxmetrics::counter<TCount>> counter(const metric_path& name, const tag_collection& tags = tag_collection())
     {
         return this->template counter<TCount>(name, 0, tags);
     }
@@ -395,7 +431,7 @@ public:
      * \return the ewma at the path specified with the tags specified
      */
     template<period::value Window, period::value Interval = time::seconds(1), typename TValue = double>
-    cxxmetrics::ewma<Window, Interval, TValue>& ewma(const metric_path& name,
+    std::shared_ptr<cxxmetrics::ewma<Window, Interval, TValue>> ewma(const metric_path& name,
                        const tag_collection& tags = tag_collection());
 
     /**
@@ -413,7 +449,7 @@ public:
      * \return the gauge at the path specified with the tags specified
      */
     template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation = gauges::aggregation_average>
-    cxxmetrics::gauge<TGaugeType, TAggregation>& gauge(const metric_path& name,
+    std::shared_ptr<cxxmetrics::gauge<TGaugeType, TAggregation>> gauge(const metric_path& name,
             TGaugeType&& data_provider,
             const tag_collection& tags = tag_collection());
 
@@ -431,7 +467,7 @@ public:
      * \return the histogram at the path specified with the tags specified
      */
     template<typename TReservoir = uniform_reservoir<int64_t, 1024>>
-    cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>& histogram(const metric_path& name,
+    std::shared_ptr<cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>> histogram(const metric_path& name,
             TReservoir&& reservoir = TReservoir(),
             const tag_collection& tags = tag_collection());
 
@@ -449,7 +485,7 @@ public:
      * \return the meter at the path specified with the tags specified
      */
     template<period::value Interval, period::value... TWindows>
-    cxxmetrics::meter<Interval, TWindows...>& meter(const metric_path& name,
+    std::shared_ptr<cxxmetrics::meter<Interval, TWindows...>> meter(const metric_path& name,
             const tag_collection& tags = tag_collection());
 
     /**
@@ -469,7 +505,7 @@ public:
      * \return the timer at the path specified with the tags specified
      */
     template<period::value TRateInterval, typename TClock = std::chrono::steady_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, period::value... TRateWindows>
-    cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>& timer(const metric_path& name,
+    std::shared_ptr<cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>> timer(const metric_path& name,
             TReservoir&& reservoir = TReservoir(),
             const tag_collection& tags = tag_collection());
 
@@ -484,7 +520,7 @@ public:
      * \tparam TRateWindows the windows over which to track the rate of timed calls
      */
     template<period::value TRateInterval = time::seconds(1), template<typename, std::size_t> typename TReservoir = uniform_reservoir, std::size_t TSize = 1024, period::value... TRateWindows>
-    cxxmetrics::timer<TRateInterval, std::chrono::steady_clock, TReservoir<typename std::chrono::steady_clock::duration, TSize>, TRateWindows...>&
+    std::shared_ptr<cxxmetrics::timer<TRateInterval, std::chrono::steady_clock, TReservoir<typename std::chrono::steady_clock::duration, TSize>, TRateWindows...>>
     timer(const metric_path& name, const tag_collection& tags = tag_collection())
     {
         return this->template timer<TRateInterval, std::chrono::steady_clock, TReservoir<typename std::chrono::steady_clock::duration, TSize>, TRateWindows...>(name, TReservoir<typename std::chrono::steady_clock::duration, TSize>(), tags);
@@ -512,10 +548,10 @@ registered_metric<TMetricType>& metrics_registry<TRepository>::get(const metric_
 
 template<typename TRepository>
 template<typename TMetricType, typename... TConstructorArgs>
-TMetricType& metrics_registry<TRepository>::get(const metric_path& path, const tag_collection& tags, TConstructorArgs&&... args)
+std::shared_ptr<TMetricType> metrics_registry<TRepository>::get(const metric_path& path, const tag_collection& tags, TConstructorArgs&&... args)
 {
     auto& r = get<TMetricType>(path);
-    return r.template tagged<TMetricType>(tags, std::forward<TConstructorArgs>(args)...);
+    return r.template tagged<TMetricType>(repo_.tags(tags), std::forward<TConstructorArgs>(args)...);
 }
 
 template<typename TRepository>
@@ -526,15 +562,33 @@ void metrics_registry<TRepository>::visit_registered_metrics(THandler &&handler)
 }
 
 template<typename TRepository>
+template<typename TMetric>
+bool metrics_registry<TRepository>::register_existing(const metric_path& name,
+        std::shared_ptr<TMetric> metric,
+        const tag_collection& tags)
+{
+    if (!metric)
+        return false;
+
+    auto& l = repo_.get_or_add(name, [tn = metric->metric_type()]() { return std::make_unique<registered_metric<TMetric>>(tn); });
+    if (l.type() != metric->metric_type())
+        throw metric_type_mismatch(l.type(), metric->metric_type());
+
+    return l.template add_existing<TMetric>(repo_.tags(tags), std::move(metric));
+}
+
+template<typename TRepository>
 template<typename TCount>
-cxxmetrics::counter<TCount>& metrics_registry<TRepository>::counter(const metric_path& name, TCount&& initialValue, const tag_collection& tags)
+std::shared_ptr<cxxmetrics::counter<TCount>> metrics_registry<TRepository>::counter(const metric_path& name,
+        TCount&& initialValue,
+        const tag_collection& tags)
 {
     return get<cxxmetrics::counter<TCount>>(name, tags, std::forward<TCount>(initialValue));
 }
 
 template<typename TRepository>
 template<period::value Window, period::value Interval, typename TValue>
-cxxmetrics::ewma<Window, Interval, TValue>& metrics_registry<TRepository>::ewma(const metric_path& name,
+std::shared_ptr<cxxmetrics::ewma<Window, Interval, TValue>> metrics_registry<TRepository>::ewma(const metric_path& name,
         const tag_collection& tags)
 {
     return get<cxxmetrics::ewma<Window, Interval, TValue>>(name, tags);
@@ -542,7 +596,7 @@ cxxmetrics::ewma<Window, Interval, TValue>& metrics_registry<TRepository>::ewma(
 
 template<typename TRepository>
 template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
-cxxmetrics::gauge<TGaugeType, TAggregation>& metrics_registry<TRepository>::gauge(
+std::shared_ptr<cxxmetrics::gauge<TGaugeType, TAggregation>> metrics_registry<TRepository>::gauge(
         const metric_path& name,
         TGaugeType&& data_provider,
         const tag_collection& tags)
@@ -552,7 +606,7 @@ cxxmetrics::gauge<TGaugeType, TAggregation>& metrics_registry<TRepository>::gaug
 
 template<typename TRepository>
 template<typename TReservoir>
-cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>& metrics_registry<TRepository>::histogram(const metric_path& name,
+std::shared_ptr<cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>> metrics_registry<TRepository>::histogram(const metric_path& name,
         TReservoir&& reservoir,
         const tag_collection& tags)
 {
@@ -561,7 +615,7 @@ cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>& metrics_regi
 
 template<typename TRepository>
 template<period::value Interval, period::value... TWindows>
-cxxmetrics::meter<Interval, TWindows...>& metrics_registry<TRepository>::meter(const metric_path& name,
+std::shared_ptr<cxxmetrics::meter<Interval, TWindows...>> metrics_registry<TRepository>::meter(const metric_path& name,
         const tag_collection& tags)
 {
     return get<cxxmetrics::meter<Interval, TWindows...>>(name, tags);
@@ -569,7 +623,7 @@ cxxmetrics::meter<Interval, TWindows...>& metrics_registry<TRepository>::meter(c
 
 template<typename TRepository>
 template<period::value TRateInterval, typename TClock, typename TReservoir, period::value... TRateWindows>
-cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>& metrics_registry<TRepository>::timer(const metric_path& name,
+std::shared_ptr<cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>> metrics_registry<TRepository>::timer(const metric_path& name,
         TReservoir&& reservoir,
         const tag_collection& tags)
 {
