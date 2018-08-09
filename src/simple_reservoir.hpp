@@ -16,6 +16,8 @@ class simple_reservoir
     internal::ringbuf<TElem, TSize> data_;
 
 public:
+    using value_type = TElem;
+
     simple_reservoir() noexcept = default;
 
     simple_reservoir(const simple_reservoir &other) noexcept = default;

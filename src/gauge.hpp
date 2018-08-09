@@ -40,14 +40,14 @@ class primitive_gauge : gauge<TGaugeType, TAggregation>
 {
     TGaugeType value_;
 public:
-    primitive_gauge(const TGaugeType &initial_value = TGaugeType()) noexcept;
-    primitive_gauge(const primitive_gauge &copy) noexcept = default;
-    primitive_gauge(primitive_gauge &&mv) noexcept = default;
+    primitive_gauge(const TGaugeType& initial_value = TGaugeType()) noexcept;
+    primitive_gauge(const primitive_gauge& copy) noexcept = default;
+    primitive_gauge(primitive_gauge&& mv) noexcept = default;
     ~primitive_gauge() = default;
 
-    primitive_gauge &operator=(const TGaugeType &value) noexcept;
-    primitive_gauge &operator=(const primitive_gauge &other) noexcept = default;
-    primitive_gauge &operator=(primitive_gauge &&other) noexcept = default;
+    primitive_gauge& operator=(const TGaugeType& value) noexcept;
+    primitive_gauge& operator=(const primitive_gauge& other) noexcept = default;
+    primitive_gauge& operator=(primitive_gauge&& other) noexcept = default;
 
     void set(TGaugeType value) noexcept;
 
@@ -58,12 +58,12 @@ public:
 };
 
 template<typename TGaugeType, gauge_aggregation_type TAggregation>
-primitive_gauge<TGaugeType, TAggregation>::primitive_gauge(const TGaugeType &initial_value) noexcept :
+primitive_gauge<TGaugeType, TAggregation>::primitive_gauge(const TGaugeType& initial_value) noexcept :
     value_(initial_value)
 { }
 
 template<typename TGaugeType, gauge_aggregation_type TAggregation>
-primitive_gauge<TGaugeType, TAggregation> &primitive_gauge<TGaugeType, TAggregation>::operator=(const TGaugeType &value) noexcept
+primitive_gauge<TGaugeType, TAggregation> &primitive_gauge<TGaugeType, TAggregation>::operator=(const TGaugeType& value) noexcept
 {
     value_ = value;
     return *this;
@@ -101,14 +101,14 @@ class functional_gauge : public gauge<typename functional_gauge_info<TFn>::gauge
 public:
     using gauge_type = typename functional_gauge_info<TFn>::gauge_type;
 
-    functional_gauge(const TFn &fn) noexcept;
-    functional_gauge(const functional_gauge &copy) noexcept = default;
-    functional_gauge(functional_gauge &&mv) noexcept = default;
+    functional_gauge(const TFn& fn) noexcept;
+    functional_gauge(const functional_gauge& copy) noexcept = default;
+    functional_gauge(functional_gauge&& mv) noexcept = default;
 
     ~functional_gauge() = default;
 
-    functional_gauge &operator=(const functional_gauge &other) noexcept = default;
-    functional_gauge &operator=(functional_gauge &&mv) noexcept = default;
+    functional_gauge& operator=(const functional_gauge& other) noexcept = default;
+    functional_gauge& operator=(functional_gauge&& mv) noexcept = default;
 
     gauge_type get() noexcept override;
     gauge_type get() const noexcept override;
@@ -117,7 +117,7 @@ public:
 };
 
 template<typename TFn, gauge_aggregation_type TAggregation>
-functional_gauge<TFn, TAggregation>::functional_gauge(const TFn &fn) noexcept :
+functional_gauge<TFn, TAggregation>::functional_gauge(const TFn& fn) noexcept :
     fn_(fn)
 { }
 
@@ -138,11 +138,11 @@ class referential_gauge : public gauge<TRefType>
 {
     std::reference_wrapper<TRefType> value_;
 public:
-    referential_gauge(TRefType &t) noexcept;
-    referential_gauge(const referential_gauge &copy) noexcept;
+    referential_gauge(TRefType& t) noexcept;
+    referential_gauge(const referential_gauge& copy) noexcept;
     ~referential_gauge() = default;
 
-    referential_gauge &operator=(const referential_gauge &copy) noexcept;
+    referential_gauge& operator=(const referential_gauge& copy) noexcept;
 
     TRefType get() noexcept override;
     TRefType get() const noexcept override;
@@ -151,17 +151,17 @@ public:
 };
 
 template<typename TRefType, gauge_aggregation_type TAggregation>
-referential_gauge<TRefType, TAggregation>::referential_gauge(TRefType &t) noexcept :
+referential_gauge<TRefType, TAggregation>::referential_gauge(TRefType& t) noexcept :
     value_(t)
 { }
 
 template<typename TRefType, gauge_aggregation_type TAggregation>
-referential_gauge<TRefType, TAggregation>::referential_gauge(const referential_gauge &other) noexcept :
+referential_gauge<TRefType, TAggregation>::referential_gauge(const referential_gauge& other) noexcept :
         value_(other.value_.get())
 { }
 
 template<typename TRefType, gauge_aggregation_type TAggregation>
-referential_gauge<TRefType, TAggregation> &referential_gauge<TRefType, TAggregation>::operator=(const referential_gauge &copy) noexcept
+referential_gauge<TRefType, TAggregation> &referential_gauge<TRefType, TAggregation>::operator=(const referential_gauge& copy) noexcept
 {
     value_ = copy.value_.get();
     return *this;
@@ -203,21 +203,21 @@ template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation = gaug
 class gauge : public gauges::primitive_gauge<TGaugeType, TAggregation>, public metric<gauge<TGaugeType>>
 {
 public:
-    explicit gauge(const TGaugeType &value = TGaugeType()) noexcept :
+    explicit gauge(const TGaugeType& value = TGaugeType()) noexcept :
             gauges::primitive_gauge<TGaugeType>(value)
     { }
-    gauge(const gauge &copy) noexcept = default;
-    gauge(gauge &&mv) noexcept = default;
+    gauge(const gauge& copy) noexcept = default;
+    gauge(gauge&& mv) noexcept = default;
 
     ~gauge() = default;
 
-    gauge &operator=(const TGaugeType &value) noexcept
+    gauge& operator=(const TGaugeType& value) noexcept
     {
         gauges::primitive_gauge<TGaugeType>::operator=(value);
         return *this;
     }
-    gauge &operator=(const gauge &other) noexcept = default;
-    gauge &operator=(gauge &&mv) noexcept = default;
+    gauge& operator=(const gauge& other) noexcept = default;
+    gauge& operator=(gauge&& mv) noexcept = default;
 };
 
 template<typename T, gauges::gauge_aggregation_type TAggregation>
@@ -230,39 +230,74 @@ public:
     explicit gauge(std::function<T()> &&fn) noexcept :
             gauges::functional_gauge<std::function<T()>>(std::forward(fn))
     { }
-    gauge(const gauge &copy) noexcept = default;
-    gauge(gauge &&mv) noexcept = default;
+    gauge(const gauge& copy) noexcept = default;
+    gauge(gauge&& mv) noexcept = default;
     ~gauge() = default;
 
-    gauge &operator=(const gauge &other) noexcept = default;
-    gauge &operator=(gauge &&mv) noexcept = default;
+    gauge& operator=(const gauge& other) noexcept = default;
+    gauge& operator=(gauge&& mv) noexcept = default;
 };
 
 template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
-class gauge<TGaugeType *, TAggregation> : public gauges::referential_gauge<TGaugeType>, public metric<gauge<TGaugeType &>>
+class gauge<TGaugeType*, TAggregation> : public gauges::referential_gauge<TGaugeType>, public metric<gauge<TGaugeType &>>
 {
 public:
-    inline explicit gauge(TGaugeType *ptr) noexcept :
+    inline explicit gauge(TGaugeType* ptr) noexcept :
             gauges::referential_gauge<TGaugeType>(*ptr)
     { }
-    gauge(const gauge &copy) noexcept = default;
+    gauge(const gauge& copy) noexcept = default;
     ~gauge() = default;
 
-    gauge &operator=(const gauge &other) noexcept = default;
+    gauge& operator=(const gauge& other) noexcept = default;
 };
 
 template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
 class gauge<TGaugeType &, TAggregation> : public gauges::referential_gauge<TGaugeType>, public metric<gauge<TGaugeType &>>
 {
 public:
-    inline explicit gauge(TGaugeType &ref) noexcept :
+    inline explicit gauge(TGaugeType& ref) noexcept :
             gauges::referential_gauge<TGaugeType>(ref)
     { }
-    gauge(const gauge &copy) noexcept = default;
+    gauge(const gauge& copy) noexcept = default;
     ~gauge() = default;
 
-    gauge &operator=(const gauge &other) noexcept = default;
+    gauge& operator=(const gauge& other) noexcept = default;
 };
+
+namespace internal
+{
+
+template<typename T, gauges::gauge_aggregation_type TAggregation>
+struct default_metric_builder<cxxmetrics::gauge<std::function<T()>, TAggregation>>
+{
+    cxxmetrics::gauge<std::function<T()>, TAggregation> operator()() const
+    {
+        static std::function<T()> o = []() { return std::declval<T>(); };
+        return cxxmetrics::gauge<std::function<T()>, TAggregation>(o);
+    }
+};
+
+template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
+struct default_metric_builder<cxxmetrics::gauge<TGaugeType &, TAggregation>>
+{
+    cxxmetrics::gauge<TGaugeType&, TAggregation> operator()() const
+    {
+        static TGaugeType *r = nullptr;
+        return cxxmetrics::gauge<TGaugeType&, TAggregation>(*r);
+    }
+};
+
+template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
+struct default_metric_builder<cxxmetrics::gauge<TGaugeType *, TAggregation>>
+{
+    cxxmetrics::gauge<TGaugeType*, TAggregation> operator()() const
+    {
+        static TGaugeType *r = nullptr;
+        return cxxmetrics::gauge<TGaugeType, TAggregation>(r);
+    }
+};
+
+}
 
 }
 

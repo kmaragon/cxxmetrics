@@ -240,12 +240,13 @@ protected:
 template<typename TClockGet, period::value ...TWindows>
 class _meter_impl : public _meter_impl_base<TClockGet, TWindows...>
 {
-    typename _meter_impl_base<TClockGet>::clock_point start_;
+    using clock_point = typename _meter_impl_base<TClockGet>::clock_point;
+    clock_point start_;
     std::atomic_int_fast64_t total_;
 public:
     explicit _meter_impl(const typename ewma<TClockGet>::clock_diff &interval, const TClockGet &clkget) noexcept :
             _meter_impl_base<TClockGet, TWindows...>(interval, clkget),
-            start_(_meter_impl_base<TClockGet, TWindows...>::now()),
+            start_{},
             total_(0)
     { }
 
@@ -270,13 +271,18 @@ public:
     {
         auto since = _meter_impl_base<TClockGet, TWindows...>::now() - start_;
         auto units = since / _meter_impl_base<TClockGet, TWindows...>::interval();
+        if (start_ == clock_point{})
+            units = 1;
         if (!units)
-            return (total_ * 1.0);
-        return (total_ * 1.0) / units;
+            return (total_ * 1.0l);
+        return (total_ * 1.0l) / units;
     }
 
     void mark(int64_t by = 1)
     {
+        // this will be imperfect but it should be close enough
+        if (start_ == clock_point{})
+            start_ = _meter_impl_base<TClockGet, TWindows...>::now();
         _meter_impl_base<TClockGet, TWindows...>::mark(by);
         total_ += by;
     }
@@ -288,12 +294,12 @@ public:
 namespace meters
 {
 
-template<period::value ...TWindows>
-class meter : public metric<meter<TWindows...>>
+template<period::value TInterval, period::value ...TWindows>
+class meter : public metric<meter<TInterval, TWindows...>>
 {
 protected:
     internal::_meter_impl<steady_clock_point, TWindows...> impl_;
-    explicit meter(const std::chrono::steady_clock::duration &interval) noexcept;
+    meter() noexcept;
 
     struct map_builder
     {
@@ -401,22 +407,19 @@ public:
     }
 };
 
-template<period::value ...TWindows>
-meter<TWindows...>::meter(const std::chrono::steady_clock::duration &interval) noexcept :
-    impl_(interval, steady_clock_point())
+template<period::value TInterval, period::value ...TWindows>
+meter<TInterval, TWindows...>::meter() noexcept :
+    impl_(period(TInterval), steady_clock_point())
 { }
 
-template<typename TWindows>
+template<period::value TInterval, typename TWindows>
 class meter_builder;
 
-template<period::value ...TWindows>
-class meter_builder<templates::duration_collection<TWindows...>> : public meter<TWindows...>
+template<period::value TInterval, period::value ...TWindows>
+class meter_builder<TInterval, templates::duration_collection<TWindows...>> : public meter<TInterval, TWindows...>
 {
 public:
-    inline explicit meter_builder(const std::chrono::steady_clock::duration &interval) :
-            meter<TWindows...>(interval)
-    {
-    }
+    meter_builder() = default;
 
     meter_builder(const meter_builder &other) noexcept = default;
     meter_builder &operator=(const meter_builder &other) noexcept = default;
@@ -429,27 +432,12 @@ public:
  *
  * @tparam TWindows The various time windows to track. For example '15_min'
  */
-template<period::value... TWindows>
-class meter : public meters::meter_builder<typename templates::sort_unique<TWindows...>::type>
+template<period::value TInterval, period::value... TWindows>
+class meter : public meters::meter_builder<TInterval, typename templates::sort_unique<TWindows...>::type>
 {
-    using base = meters::meter_builder<typename templates::sort_unique<TWindows...>::type>;
+    using base = meters::meter_builder<TInterval, typename templates::sort_unique<TWindows...>::type>;
 public:
-    /**
-     * \brief construct a meter that measures the rates provided using the specified interval
-     *
-     * \example
-     * For example, in order to track the average over a window with a halflife of 15 minutes of transactions per second:
-     * \code
-     * meter_with_mean<15_min> meter(5_sec);
-     * \endcode
-     *
-     * @param interval the interval that represents the discrete points over which the moving average is applied
-     */
-    explicit meter(const std::chrono::steady_clock::duration &interval = std::chrono::seconds(5)) :
-            base(interval)
-    {
-    }
-
+    meter() noexcept = default;
     meter(const meter& m) noexcept  = default;
     meter& operator=(const meter& m) noexcept = default;
 

@@ -12,15 +12,16 @@ namespace cxxmetrics
 /**
  * \brief A timer that tracks lengths of times the things take
  *
+ * \tparam TRateInterval the interval over which the rate is calculated
  * \tparam TClock The type of clock to use for tracking wall-clock time for operations. This should be a std::chrono clock type
  * \tparam TReservoir The type of reservoir to use for the underlying histogram of timings
  * \tparam TWindows The meter periods to track rates of, for example: 10_sec, 1_min, 1_hour
  */
-template<typename TClock = std::chrono::system_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, period::value... TWindows>
-class timer : public metric<timer<TClock, TReservoir, TWindows...>>
+template<period::value TRateInterval = time::seconds(1), typename TClock = std::chrono::system_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, period::value... TWindows>
+class timer : public metric<timer<TRateInterval, TClock, TReservoir, TWindows...>>
 {
     histogram<typename TClock::duration, TReservoir> histogram_;
-    meter<TWindows...> meter_;
+    meter<TRateInterval, TWindows...> meter_;
     TClock clock_;
 
 public:
@@ -33,36 +34,23 @@ public:
      *
      * This will usually not get used. It is provided to provide special clocks with std::chrono semantics but rely on internal state
      *
-     * \param rate_interval the interval for which to collect call rates on
      * \param reservoir The reservoir to use for the timer
      * \param clock the clock to use for tracking wall-clock time
      */
-    template<typename TRep, typename TPer>
-    timer(const std::chrono::duration<TRep, TPer>& rate_interval, TReservoir &&reservoir, TClock &&clock) :
+    timer(TReservoir &&reservoir, TClock &&clock) :
             histogram_(std::forward<TReservoir>(reservoir)),
-            meter_(rate_interval),
-            clock_(std::forward<TReservoir>(clock)) {}
+            clock_(std::forward<TReservoir>(clock))
+    { }
 
-    /**
-     * \brief Construct a timer with a rate interval and reservoir instance
-     *
-     * \param reservoir the reservoir backing the timer
-     */
-    template<typename TRep, typename TPer>
-    timer(const std::chrono::duration<TRep, TPer>& rate_interval, TReservoir &&reservoir = TReservoir()) :
-            histogram_(std::forward<TReservoir>(reservoir)),
-            meter_(rate_interval)
-    {}
 
     /**
      * \brief Construct a timer with a reservoir instance (or default construct)
      *
      * \param reservoir the reservoir backing the timer
      */
-    template<typename TRep, typename TPer>
     timer(TReservoir &&reservoir = TReservoir()) :
             histogram_(std::forward<TReservoir>(reservoir))
-    {}
+    { }
 
     /**
      * \brief Get the mean throughput of timer updates
@@ -246,11 +234,11 @@ inline scoped_timer_t<TTimer> scoped_timer(TTimer& timer)
     return scoped_timer_t<TTimer>(timer);
 }
 
-template<typename TClock, typename TReservoir, period::value... TWindows>
+template<period::value TRateInterval, typename TClock, typename TReservoir, period::value... TWindows>
 template<typename TRunnable, bool TIncludeExceptions>
-typename std::invoke_result<TRunnable>::type timer<TClock, TReservoir, TWindows...>::time(const TRunnable &runnable)
+typename std::invoke_result<TRunnable>::type timer<TRateInterval, TClock, TReservoir, TWindows...>::time(const TRunnable &runnable)
 {
-    scoped_timer_t<timer<TClock, TReservoir, TWindows...>> tm(*this);
+    scoped_timer_t<timer<TRateInterval, TClock, TReservoir, TWindows...>> tm(*this);
     if (!TIncludeExceptions)
     {
         try

@@ -22,10 +22,6 @@ public:
 
 };
 
-// fwd
-class period;
-constexpr period operator""_micro(unsigned long long value);
-
 /**
  * \brief a constexpr period of time used in metric templates for things like time windows
  */
@@ -36,9 +32,6 @@ public:
 
 private:
     const value value_;
-
-
-    friend constexpr period operator""_micro(value v);
 public:
 
     constexpr period(value v) :
@@ -49,44 +42,76 @@ public:
         return (templates::duration_type) value_;
     }
 
-    constexpr operator std::chrono::steady_clock::duration() const
+    constexpr std::chrono::steady_clock::duration to_duration() const
     {
         return std::chrono::microseconds(value_);
     }
+
+    constexpr operator std::chrono::steady_clock::duration() const
+    {
+        return to_duration();
+    }
+
 };
 
-namespace literals {
+namespace time
+{
 
-constexpr period operator""_micro(period::value v)
+constexpr period microseconds(period::value v)
 {
     return v;
 }
 
-constexpr period operator""_msec(period::value v)
+constexpr period milliseconds(period::value v)
 {
-    return operator""_micro(v * 1000);
+    return microseconds(v * 1000);
 }
 
-constexpr period operator""_sec(period::value v)
+constexpr period seconds(period::value v)
 {
-    return operator""_msec(v * 1000);
+    return milliseconds(v * 1000);
 }
 
-constexpr period operator""_min(period::value v)
+constexpr period minutes(period::value v)
 {
-    return operator""_sec(v * 60);
+    return seconds(v * 60);
 }
 
-constexpr period operator""_hour(period::value v)
+constexpr period hours(period::value v)
 {
-    return operator""_min(v * 60);
+    return minutes(v * 60);
 }
 
-constexpr period operator""_day(period::value v)
-{
-    return operator""_hour(v * 24);
 }
 
+}
+
+namespace cxxmetrics_literals
+{
+
+constexpr cxxmetrics::period operator""_micro(cxxmetrics::period::value v)
+{
+    return cxxmetrics::time::microseconds(v);
+}
+
+constexpr cxxmetrics::period operator""_msec(cxxmetrics::period::value v)
+{
+    return cxxmetrics::time::milliseconds(v);
+}
+
+constexpr cxxmetrics::period operator""_sec(cxxmetrics::period::value v)
+{
+    return cxxmetrics::time::seconds(v);
+}
+
+constexpr cxxmetrics::period operator""_min(cxxmetrics::period::value v)
+{
+    return cxxmetrics::time::minutes(v);
+}
+
+constexpr cxxmetrics::period operator""_hour(cxxmetrics::period::value v)
+{
+    return cxxmetrics::time::hours(v);
 }
 
 }

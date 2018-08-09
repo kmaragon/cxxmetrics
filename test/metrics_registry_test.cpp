@@ -1,9 +1,13 @@
 #include <catch.hpp>
 #include <thread>
 #include <metrics_registry.hpp>
+#include <simple_reservoir.hpp>
+#include <uniform_reservoir.hpp>
+#include <sliding_window.hpp>
 
 using namespace std::chrono_literals;
 using namespace cxxmetrics;
+using namespace cxxmetrics_literals;
 
 TEST_CASE("Registry retreiving same type works", "[metrics_registry]")
 {
@@ -71,9 +75,18 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
     int names = 0;
     int instances = 0;
 
+    int gaugeProvider = 7;
+
     metrics_registry<> subject;
     subject.counter("MyCounter");
-    subject.ewma("averages"_m/"MyEWMA"/"P2", 60s);
+    subject.ewma<1_min>("averages"_m/"MyEWMA"/"P2");
+    subject.gauge("Gauge"_m/"Other", gaugeProvider);
+    subject.histogram("H"_m/"istogramS", simple_reservoir<long, 100>());
+    subject.histogram("H"_m/"istogramU", uniform_reservoir<long, 100>());
+    subject.histogram("H"_m/"istogramW", sliding_window_reservoir<long, 100>(100s));
+    subject.meter<1_sec, 1_min, 1_sec, 5_min>("Meter");
+    subject.timer<1_sec, std::chrono::system_clock, simple_reservoir<typename std::chrono::system_clock::duration, 1024>, 1_min, 5_min>("TimerVerbose");
+    subject.timer<1_sec, uniform_reservoir, 1024, 1_min, 5_min>("TimerSimpler");
 
     subject.visit_registered_metrics([&instances, &names](const metric_path& path, basic_registered_metric& metric) {
         ++names;
@@ -82,7 +95,7 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
         });
     });
 
-    REQUIRE(names == 2);
+    REQUIRE(names == 9);
     REQUIRE(instances == names);
 
     names = 0;
@@ -99,16 +112,16 @@ TEST_CASE("Registry average aggregation", "[metrics_registry]")
 {
     metrics_registry<> subject;
 
-    auto& e1 = subject.ewma("emwa1"_m, 500s, 50us);
-    auto& e2 = subject.ewma("emwa1"_m, 500s, 50us, {{"mytag","tagvalue"}});
-    auto& e3 = subject.ewma("emwa1"_m, 500s, 50us, {{"mytag","tagvalue2"}});
+    auto& e1 = subject.ewma<1_min, 50_micro>("emwa1");
+    auto& e2 = subject.ewma<1_min, 50_micro>("emwa1", {{"mytag","tagvalue"}});
+    auto& e3 = subject.ewma<1_min, 50_micro>("emwa1", {{"mytag","tagvalue2"}});
 
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 20; i++)
     {
+        std::this_thread::sleep_for(50us);
         e1.mark(1000);
         e2.mark(8000);
         e3.mark(18000);
-        std::this_thread::sleep_for(50us);
     }
 
     metric_value total(0);
@@ -119,4 +132,89 @@ TEST_CASE("Registry average aggregation", "[metrics_registry]")
     });
 
     REQUIRE(round(total) == 9000);
+}
+
+TEST_CASE("Registry histogram aggregation", "[metrics_registry]")
+{
+    metrics_registry<> subject;
+
+    auto& h1 = subject.histogram("histogram", simple_reservoir<int64_t, 100>());
+    auto& h2 = subject.histogram("histogram"_m, simple_reservoir<int64_t, 100>(), {{"mytag","tagvalue"}});
+    auto& h3 = subject.histogram("histogram"_m, simple_reservoir<int64_t, 100>(), {{"mytag","tagvalue2"}});
+
+    for (int i = 1; i <= 100; i++)
+    {
+        h1.update(i * 10);
+        h2.update(i * 42);
+        h3.update(i * 97);
+    }
+
+    metric_value min(0);
+    metric_value max(0);
+    metric_value p50(0);
+    int64_t count;
+    subject.visit_registered_metrics([&](const metric_path& path, basic_registered_metric& metric) {
+        metric.aggregate([&](const histogram_snapshot& ctr) {
+            min = ctr.min();
+            max = ctr.max();
+            p50 = ctr.value<50_p>();
+            count = ctr.count();
+        });
+    });
+
+    INFO("Min = " << min << ", max = " << max << ", p50 = " << p50);
+
+    auto h1ss = h1.snapshot();
+    auto h2ss = h2.snapshot();
+    auto h3ss = h3.snapshot();
+
+    REQUIRE(h1ss.value<50_p>() != p50);
+    REQUIRE(h2ss.value<50_p>() != p50);
+    REQUIRE(h3ss.value<50_p>() != p50);
+    REQUIRE(count == 300);
+}
+
+TEST_CASE("Registry meter aggregation", "[metrics_registry]")
+{
+    metrics_registry<> subject;
+
+    constexpr period interval = 50_micro;
+
+    auto& m1 = subject.meter<interval, 1_min, 5_min, 1_hour>("meter1"_m);
+    auto& m2 = subject.meter<interval, 1_min, 5_min, 1_hour>("meter1"_m, {{"mytag","tagvalue"}});
+    auto& m3 = subject.meter<interval, 1_min, 5_min, 1_hour>("meter1"_m, {{"mytag","tagvalue2"}});
+
+    for (int i = 0; i < 10; i++)
+    {
+        std::this_thread::sleep_for(interval.to_duration());
+        m1.mark(1000);
+        m2.mark(8000);
+        m3.mark(18000);
+    }
+
+    metric_value mean(0);
+    metric_value m100(0);
+    metric_value m200(0);
+    metric_value m500(0);
+
+    subject.visit_registered_metrics([&](const metric_path& path, basic_registered_metric& metric) {
+        metric.aggregate([&](const meter_snapshot& ctr) {
+            mean = ctr.value();
+            for (const auto& p : ctr)
+            {
+                if (p.first == 1min)
+                    m100 = (double)p.second;
+                else if (p.first == 5min)
+                    m200 = (double)p.second;
+                else if (p.first == 1h)
+                    m500 = (double)p.second;
+            }
+        });
+    });
+
+    INFO("Mean = " << mean << ", m100 = " << m100 << ", m200 = " << m200 << ", m500 = " << m500);
+
+    REQUIRE(round(m100) == 9000);
+    REQUIRE(round(m200) == 9000);
+    REQUIRE(round(m500) == 9000);
 }

@@ -5,6 +5,7 @@
 
 using namespace std::chrono_literals;
 using namespace cxxmetrics;
+using namespace cxxmetrics_literals;
 
 using mock_ewma = internal::ewma<mock_clock>;
 
@@ -31,7 +32,7 @@ TEST_CASE("EWMA backwards clock skips", "[ewma]")
 
 TEST_CASE("EMWA calculates fixed rate", "[ewma]")
 {
-    int clock = 0;
+    int clock = 1;
     mock_ewma e(10, 1, clock);
 
     for (int i = 0; i <= 10; i++)
@@ -45,7 +46,7 @@ TEST_CASE("EMWA calculates fixed rate", "[ewma]")
 
 TEST_CASE("EWMA calculates fixed rate threads", "[ewma]")
 {
-    ewma<double> e(10ms, 2ms);
+    ewma<10_msec, 2_msec> e;
 
     double rate;
     std::vector<std::thread> threads;
@@ -66,13 +67,13 @@ TEST_CASE("EWMA calculates fixed rate threads", "[ewma]")
         thr.join();
 
     // note to reader: this is not a benchmark. This is just a sanity check for a 10ms windowed ewma
-    WARN(rate << " (" << (rate * 100) << " marks per second)");
+    INFO(rate << " (" << (rate * 100) << " marks per second)");
     REQUIRE(rate >= 5.0);
 }
 
 TEST_CASE("EWMA calculates after jump past window", "[ewma]")
 {
-    int clock = 0;
+    int clock = 1;
     mock_ewma e(10, 1, clock);
 
     for (int i = 0; i <= 10; i++)
@@ -90,7 +91,7 @@ TEST_CASE("EWMA calculates after jump past window", "[ewma]")
 
 TEST_CASE("EWMA calculates after jump in window", "[ewma]")
 {
-    int clock = 0;
+    int clock = 1;
     mock_ewma e(10, 1, clock);
 
     for (int i = 0; i <= 100; i++)
@@ -108,15 +109,14 @@ TEST_CASE("EWMA calculates after jump in window", "[ewma]")
 
 TEST_CASE("EWMA produces correct type", "[ewma]")
 {
-    ewma<double> a(5s);
+    ewma<5_sec, 5_sec, double> a;
+    ewma<5_sec, 10_sec, double> b;
 
-    REQUIRE(a.metric_type() == "cxxmetrics::ewma<double>");
+    REQUIRE(a.metric_type() != b.metric_type());
 }
 
 TEST_CASE("EWMA excercise snapshot", "[ewma]")
 {
-    ewma<double> e(10s);
-    e.mark(0);
-
+    ewma<10_sec, 5_sec, double> e;
     REQUIRE(e.snapshot() == 0);
 }

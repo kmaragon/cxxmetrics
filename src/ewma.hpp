@@ -272,8 +272,8 @@ struct steady_clock_point
 /**
  * \brief An exponential weighted moving average metric
  */
-template<typename TValue = double>
-class ewma : public metric<ewma<TValue>>
+template<period::value TWindow, period::value TInterval = time::seconds(1), typename TValue = double>
+class ewma : public metric<ewma<TWindow, TInterval, TValue>>
 {
     internal::ewma<steady_clock_point, TValue> ewma_;
 public:
@@ -283,9 +283,8 @@ public:
      * \param window The window over which the average accounts for
      * \param interval The interval at which the average is calculated
      */
-    explicit ewma(std::chrono::steady_clock::duration window,
-         std::chrono::steady_clock::duration interval = std::chrono::seconds(5)) noexcept :
-            ewma_(window, interval)
+    ewma() noexcept :
+            ewma_(period(TWindow), period(TInterval))
     { }
 
     ewma(const ewma &ewma) noexcept = default;
@@ -330,7 +329,8 @@ public:
      * \return a reference to the ewma
      */
     template<typename TMark>
-    typename std::enable_if<std::is_arithmetic<TMark>::value, ewma<TValue>>::type& operator+=(typename std::enable_if<std::is_arithmetic<TMark>::value, TMark>::type value) noexcept
+    typename std::enable_if<std::is_arithmetic<TMark>::value, ewma<TWindow, TInterval, TValue>>::type&
+    operator+=(typename std::enable_if<std::is_arithmetic<TMark>::value, TMark>::type value) noexcept
     {
         mark(value);
         return *this;
@@ -352,20 +352,6 @@ public:
         return average_value_snapshot(ewma_.rate());
     }
 };
-
-namespace internal
-{
-
-template<typename TValue>
-struct default_metric_builder<cxxmetrics::ewma<TValue>>
-{
-    cxxmetrics::ewma<TValue> operator()() const
-    {
-        return cxxmetrics::ewma<TValue>(std::chrono::minutes(1));
-    }
-};
-
-}
 
 }
 

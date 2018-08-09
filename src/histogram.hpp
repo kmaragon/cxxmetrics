@@ -16,7 +16,7 @@ namespace cxxmetrics
  * \tparam TReservoir the type of reservoir backing the histogram
  */
 template<typename TElem, typename TReservoir = uniform_reservoir<TElem, 1024>>
-class histogram
+class histogram : public metric<histogram<TElem, TReservoir>>
 {
     TReservoir reservoir_;
     counter<uint64_t> count_;

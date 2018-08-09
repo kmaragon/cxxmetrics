@@ -3,7 +3,7 @@
 #include <simple_reservoir.hpp>
 
 using namespace cxxmetrics;
-using namespace cxxmetrics::literals;
+using namespace cxxmetrics_literals;
 
 TEST_CASE("Histogram sanity check", "[histogram]")
 {

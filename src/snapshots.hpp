@@ -96,6 +96,12 @@ class average_value_snapshot : public value_snapshot
             samples_(samples)
     { }
 
+protected:
+    uint64_t samples() const
+    {
+        return samples_;
+    }
+
 public:
     average_value_snapshot(metric_value&& value) noexcept :
             average_value_snapshot(std::move(value), 1)
@@ -154,6 +160,26 @@ public:
     {
         return rates_.end();
     }
+
+    void merge(const meter_snapshot& other)
+    {
+        for (auto& pair : rates_)
+        {
+            auto fnd = other.rates_.find(pair.first);
+            if (fnd == other.rates_.end())
+                continue;
+
+            // same average calculation
+            auto& other_rate = fnd->second;
+            auto sb = this->samples() * 1.0l;
+            auto os = other.samples() * 1.0l;
+            auto s1 = this->samples() + os;
+
+            pair.second = (metric_value(sb / s1) * pair.second) + (other_rate * metric_value(os / s1));
+        }
+        // this will bump samples
+        average_value_snapshot::merge(other);
+    }
 };
 
 class quantile
@@ -185,26 +211,12 @@ public:
 
 };
 
-namespace literals
-{
-
-constexpr quantile operator ""_p(long double value)
-{
-    return quantile(value);
-}
-
-constexpr quantile operator ""_p(long long unsigned int value)
-{
-    return quantile(value * 1.0l);
-}
-
-}
-
 /**
  * A reservoir snapshot from which quantiles, mins, and maxes can be grabbed
  */
 class reservoir_snapshot
 {
+protected:
     std::vector<metric_value> values_;
 public:
     /**
@@ -347,6 +359,119 @@ inline reservoir_snapshot& reservoir_snapshot::operator=(reservoir_snapshot&& ot
 class histogram_snapshot : public reservoir_snapshot
 {
     uint64_t count_;
+
+    template<typename TContainer1, typename TContainer2>
+    class alternating_iterator : public std::iterator<std::forward_iterator_tag, metric_value>
+    {
+        using iterator1 = typename TContainer1::const_iterator;
+        using iterator2 = typename TContainer2::const_iterator;
+
+        const TContainer1& srca_;
+        const TContainer2& srcb_;
+
+        iterator1 a_;
+        iterator2 b_;
+
+        bool ata_;
+
+        metric_value current_;
+        void set_current()
+        {
+            if ((ata_ || b_ == srcb_.end()) && a_ != srca_.end())
+                current_ = metric_value(*a_);
+            else if (b_ != srcb_.end())
+                current_ = metric_value(*b_);
+        }
+    public:
+
+        alternating_iterator(const TContainer1& first, const TContainer2& second, iterator1&& a, iterator2&& b) :
+                srca_(first),
+                srcb_(second),
+                a_(std::forward<iterator1>(a)),
+                b_(std::forward<iterator2>(b)),
+                ata_(false),
+                current_(0)
+        {
+            if (a_ != srca_.end() && b_ != srcb_.end())
+                set_current();
+        }
+        alternating_iterator(const TContainer1& first, const TContainer2& second) :
+                alternating_iterator(first, second, first.begin(), second.begin())
+        { }
+
+        alternating_iterator begin() const
+        {
+            return alternating_iterator(srca_, srcb_);
+        }
+
+        alternating_iterator end()
+        {
+            return alternating_iterator(srca_, srcb_, srca_.end(), srcb_.end());
+        }
+
+        alternating_iterator& operator++()
+        {
+            if (a_ == srca_.end() && b_ == srcb_.end())
+                return *this;
+
+            ata_ = !ata_;
+            if (ata_ && a_ != srca_.end())
+            {
+                while (a_ != srca_.end() && *a_ <= current_)
+                    ++a_;
+
+                if (a_ == srca_.end() && b_ != srcb_.end())
+                    ++b_;
+            }
+            else
+            {
+                while (b_ != srcb_.end() && *b_ <= current_)
+                    ++b_;
+
+                if (b_ == srcb_.end() && a_ != srca_.end())
+                    ++a_;
+            }
+
+            if (a_ == srca_.end() && b_ == srcb_.end())
+                return *this;
+
+            set_current();
+            return *this;
+        }
+
+        void operator++(int)
+        {
+            this->operator++();
+        }
+
+        const metric_value* operator->() const
+        {
+            return &current_;
+        }
+
+        const metric_value& operator*() const
+        {
+            return current_;
+        }
+
+        bool operator==(const alternating_iterator& other) const
+        {
+            if (a_ == srca_.end() && b_ == srcb_.end())
+                return other.a_ == other.srca_.end() && other.b_ == other.srcb_.end();
+            return a_ == other.a_ && b_ == other.b_;
+        }
+
+        bool operator!=(const alternating_iterator& other) const
+        {
+            return !operator==(other);
+        }
+    };
+
+    template<typename TContainer1, typename TContainer2>
+    static constexpr alternating_iterator<TContainer1, TContainer2> make_alternating_iterator(const TContainer1& a, const TContainer2& b)
+    {
+        return alternating_iterator<TContainer1, TContainer2>(a, b);
+    }
 public:
     histogram_snapshot(reservoir_snapshot&& q, uint64_t count) :
             reservoir_snapshot(std::move(q)),
@@ -363,6 +488,13 @@ public:
         reservoir_snapshot::operator=(std::move(other));
         count_ = other.count_;
         return *this;
+    }
+
+    void merge(const histogram_snapshot& other)
+    {
+        auto b = make_alternating_iterator(values_, other.values_);
+        reservoir_snapshot::operator=(reservoir_snapshot(b, b.end(), std::max(count_, other.count_)));
+        count_ += other.count_;
     }
 
     uint64_t count() const
@@ -398,6 +530,12 @@ public:
     const meter_snapshot& rate() const
     {
         return meter_;
+    }
+
+    void merge(const timer_snapshot& other)
+    {
+        histogram_snapshot::merge(other);
+        meter_.merge(other.meter_);
     }
 };
 
@@ -474,6 +612,22 @@ public:
     void visit(const histogram_snapshot& hist) override { visit_hnd(hist); }
     void visit(const timer_snapshot& timer) override { visit_hnd(timer); }
 };
+
+}
+
+
+namespace cxxmetrics_literals
+{
+
+constexpr cxxmetrics::quantile operator ""_p(long double value)
+{
+    return cxxmetrics::quantile(value);
+}
+
+constexpr cxxmetrics::quantile operator ""_p(long long unsigned int value)
+{
+    return cxxmetrics::quantile(value * 1.0l);
+}
 
 }
 

@@ -7,12 +7,12 @@
 using namespace std;
 using namespace std::chrono_literals;
 using namespace cxxmetrics;
-using namespace cxxmetrics::literals;
+using namespace cxxmetrics_literals;
 
 TEST_CASE("Meter parameters with mean get sorted for equal types", "[meter]")
 {
-    meter<1_min, 30_min, 7_day, 1_day, 1_hour> m(5ms);
-    meter<1_hour, 30_min, 1_day, 7_day, 7_day, 30_min, 1_min> n(5ms);
+    meter<5_msec, 1_min, 30_min, 48_hour, 24_hour, 1_hour> m;
+    meter<5_msec, 1_hour, 30_min, 24_hour, 48_hour, 48_hour, 30_min, 1_min> n;
 
     REQUIRE(m.metric_type() == ((internal::metric *)&n)->metric_type());
     INFO("metric_type: " << m.metric_type());
@@ -20,15 +20,15 @@ TEST_CASE("Meter parameters with mean get sorted for equal types", "[meter]")
 
 TEST_CASE("Meter copy assignment works", "[meter]")
 {
-    meter<1_min, 30_min, 7_day, 1_day, 1_hour> m(5ms);
-    meter<1_min, 30_min, 7_day, 1_day, 1_hour> n(m);
+    meter<5_msec, 1_min, 30_min, 48_hour, 24_hour, 1_hour> m;
+    meter<5_msec, 1_min, 30_min, 48_hour, 24_hour, 1_hour> n(m);
 
     m = n;
 }
 
 TEST_CASE("Meter initializes correctly", "[meter]")
 {
-    meter<1_min, 1_sec> m(5ms);
+    meter<5_msec, 1_min, 1_sec> m;
     REQUIRE(m.rate<1_min>().rate == 0);
     REQUIRE(m.rate<1_sec>().rate == 0);
     REQUIRE(m.mean() == 0);
@@ -39,7 +39,7 @@ TEST_CASE("Meter initializes correctly", "[meter]")
 
 TEST_CASE("Meter rates are passed on", "[meter]")
 {
-    int clock = 0;
+    int clock = 1;
     mock_clock clk(clock);
 
     internal::_meter_impl<mock_clock, 1, 8, 20, 50> m(1, clk);
@@ -69,7 +69,7 @@ TEST_CASE("Meter rates are passed on", "[meter]")
 
 TEST_CASE("Meter snapshot", "[meter]")
 {
-    meter<1_min, 30_min, 7_day, 1_day, 1_hour> m(5us);
+    meter<5_micro, 1_min, 30_min, 48_hour, 24_hour, 1_hour> m;
     m.mark(100);
     std::this_thread::sleep_for(10us);
 

@@ -7,6 +7,10 @@
 #include "tag_collection.hpp"
 #include "counter.hpp"
 #include "ewma.hpp"
+#include "gauge.hpp"
+#include "histogram.hpp"
+#include "meter.hpp"
+#include "timer.hpp"
 
 namespace cxxmetrics
 {
@@ -352,9 +356,6 @@ public:
     /**
      * \brief Get the registered counter or register a new one with the given path and tags
      *
-     * If a metric is already registered but it's not a counter of the specified type, this
-     * will throw an exception of type metric_type_mismatch
-     *
      * \throws metric_type_mismatch if there is already a registered metric at the path of a different type
      *
      * \tparam TCount the type of counter
@@ -380,6 +381,10 @@ public:
     /**
      * \brief Get the registered exponential moving average or register a new one with the given path and tags
      *
+     * \throws metric_type_mismatch if there is already a registered metric at the path of a different type
+     *
+     * \tparam Window the window over which the ewma should decay
+     * \tparam Interval the interval size within window for the value
      * \tparam TValue the type of data in the ewma
      *
      * \param name the name of the metric to get
@@ -389,11 +394,101 @@ public:
      *
      * \return the ewma at the path specified with the tags specified
      */
-    template<typename TValue = double>
-    cxxmetrics::ewma<TValue>& ewma(const metric_path& name,
-                       const std::chrono::steady_clock::duration& window,
-                       const std::chrono::steady_clock::duration& interval = std::chrono::seconds(5),
+    template<period::value Window, period::value Interval = time::seconds(1), typename TValue = double>
+    cxxmetrics::ewma<Window, Interval, TValue>& ewma(const metric_path& name,
                        const tag_collection& tags = tag_collection());
+
+    /**
+     * \brief Get the registered gauge or register a new one with the given path and tags
+     *
+     * \throws metric_type_mismatch if there is already a registered metric at the path of a different type
+     *
+     * \tparam TGaugeType the type of data provider for the gauge
+     * \tparam TAggregation the way to aggregate the results of the same gauge for different tags (sum or avg)
+     *
+     * \param name the name of the metric to get
+     * \param data_provider the instance of the gauge type that will supply the gauge with data
+     * \param tags the tags for the permutation being sought
+     *
+     * \return the gauge at the path specified with the tags specified
+     */
+    template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation = gauges::aggregation_average>
+    cxxmetrics::gauge<TGaugeType, TAggregation>& gauge(const metric_path& name,
+            TGaugeType&& data_provider,
+            const tag_collection& tags = tag_collection());
+
+    /**
+     * \brief Get the registered histogram or register a new one with the given path and tags
+     *
+     * \throws metric_type_mismatch if there is already a registered metric at the path of a different type, including a different reservoir
+     *
+     * \tparam TReservoir the reservoir type
+     *
+     * \param name the name of the metric to get
+     * \param reservoir the reservoir instance under the histogram
+     * \param tags the tags for the permutation being sought
+     *
+     * \return the histogram at the path specified with the tags specified
+     */
+    template<typename TReservoir = uniform_reservoir<int64_t, 1024>>
+    cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>& histogram(const metric_path& name,
+            TReservoir&& reservoir = TReservoir(),
+            const tag_collection& tags = tag_collection());
+
+    /**
+     * \brief Get the registered meter or register a new one with the given path and tags
+     *
+     * \throws metric_type_mismatch if there is already a registered metric at the path of a different type, including different time windows (independent of parameter order)
+     *
+     * \tparam Interval the interval to track in each of the time windows
+     * \tparam TWindows the windows over which the meter tracks
+     *
+     * \param name the name of the metric to get
+     * \param tags the tags for the permutation being sought
+     *
+     * \return the meter at the path specified with the tags specified
+     */
+    template<period::value Interval, period::value... TWindows>
+    cxxmetrics::meter<Interval, TWindows...>& meter(const metric_path& name,
+            const tag_collection& tags = tag_collection());
+
+    /**
+     * \brief Get the registered timer or register a new one with the given path and tags
+     *
+     * \throws metric_type_mismatch if there is already a registered metric at the path of a different type, including different time windows and reservoirs (independent of parameter order)
+     *
+     * \tparam TRateInterval the interval over which to track rates
+     * \tparam TClock the clock to use for tracking time
+     * \tparam TReservoir the type of reservoir to use for timing metrics, this should be a reservoir of TClock::duration values
+     * \tparam TRateWindows the windows over which to track the rate of timed calls
+     *
+     * \param name the name of the metric to get
+     * \param reservoir the reservoir instance
+     * \param tags the tags for the permutation being sought
+     *
+     * \return the timer at the path specified with the tags specified
+     */
+    template<period::value TRateInterval, typename TClock = std::chrono::steady_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, period::value... TRateWindows>
+    cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>& timer(const metric_path& name,
+            TReservoir&& reservoir = TReservoir(),
+            const tag_collection& tags = tag_collection());
+
+    /**
+     * A wrapper for timer with some sensible defaults
+     *
+     * \throws metric_type_mismatch if there is already a registered metric at the path of a different type, including different time windows and reservoirs (independent of parameter order)
+     *
+     * \tparam TRateInterval the interval over which to track rates
+     * \tparam TReservoir the type of reservoir to use
+     * \tparam TReservoirSize the size of the reservoir
+     * \tparam TRateWindows the windows over which to track the rate of timed calls
+     */
+    template<period::value TRateInterval = time::seconds(1), template<typename, std::size_t> typename TReservoir = uniform_reservoir, std::size_t TSize = 1024, period::value... TRateWindows>
+    cxxmetrics::timer<TRateInterval, std::chrono::steady_clock, TReservoir<typename std::chrono::steady_clock::duration, TSize>, TRateWindows...>&
+    timer(const metric_path& name, const tag_collection& tags = tag_collection())
+    {
+        return this->template timer<TRateInterval, std::chrono::steady_clock, TReservoir<typename std::chrono::steady_clock::duration, TSize>, TRateWindows...>(name, TReservoir<typename std::chrono::steady_clock::duration, TSize>(), tags);
+    }
 };
 
 template<typename TRepository>
@@ -432,19 +527,53 @@ void metrics_registry<TRepository>::visit_registered_metrics(THandler &&handler)
 
 template<typename TRepository>
 template<typename TCount>
-counter<TCount>& metrics_registry<TRepository>::counter(const metric_path& name, TCount&& initialValue, const tag_collection& tags)
+cxxmetrics::counter<TCount>& metrics_registry<TRepository>::counter(const metric_path& name, TCount&& initialValue, const tag_collection& tags)
 {
     return get<cxxmetrics::counter<TCount>>(name, tags, std::forward<TCount>(initialValue));
 }
 
 template<typename TRepository>
-template<typename TValue>
-ewma<TValue> & metrics_registry<TRepository>::ewma(const metric_path& name,
-        const std::chrono::steady_clock::duration& window,
-        const std::chrono::steady_clock::duration& interval,
+template<period::value Window, period::value Interval, typename TValue>
+cxxmetrics::ewma<Window, Interval, TValue>& metrics_registry<TRepository>::ewma(const metric_path& name,
         const tag_collection& tags)
 {
-    return get<cxxmetrics::ewma<TValue>>(name, tags, window, interval);
+    return get<cxxmetrics::ewma<Window, Interval, TValue>>(name, tags);
+}
+
+template<typename TRepository>
+template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
+cxxmetrics::gauge<TGaugeType, TAggregation>& metrics_registry<TRepository>::gauge(
+        const metric_path& name,
+        TGaugeType&& data_provider,
+        const tag_collection& tags)
+{
+    return get<cxxmetrics::gauge<TGaugeType, TAggregation>>(name, tags, std::forward<TGaugeType>(data_provider));
+}
+
+template<typename TRepository>
+template<typename TReservoir>
+cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>& metrics_registry<TRepository>::histogram(const metric_path& name,
+        TReservoir&& reservoir,
+        const tag_collection& tags)
+{
+    return get<cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>>(name, tags, std::forward<TReservoir>(reservoir));
+}
+
+template<typename TRepository>
+template<period::value Interval, period::value... TWindows>
+cxxmetrics::meter<Interval, TWindows...>& metrics_registry<TRepository>::meter(const metric_path& name,
+        const tag_collection& tags)
+{
+    return get<cxxmetrics::meter<Interval, TWindows...>>(name, tags);
+}
+
+template<typename TRepository>
+template<period::value TRateInterval, typename TClock, typename TReservoir, period::value... TRateWindows>
+cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>& metrics_registry<TRepository>::timer(const metric_path& name,
+        TReservoir&& reservoir,
+        const tag_collection& tags)
+{
+    return get<cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>>(name, tags, std::forward<TReservoir>(reservoir));
 }
 
 }

@@ -6,7 +6,7 @@
 
 using namespace std;
 using namespace cxxmetrics;
-using namespace cxxmetrics::literals;
+using namespace cxxmetrics_literals;
 
 TEST_CASE("Uniform Reservoir on exact count", "[reservoir]")
 {

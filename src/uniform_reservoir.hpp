@@ -15,12 +15,12 @@ namespace cxxmetrics
  * \tparam TElem the type of elements in the reservoir
  * \tparam TSize the size of the reservoir
  */
-template<typename TElem, int64_t TSize>
+template<typename TElem, std::size_t TSize>
 class uniform_reservoir
 {
     std::default_random_engine gen_;
     TElem elems_[TSize];
-    std::atomic_int_fast64_t count_;
+    std::atomic_uint_fast64_t count_;
 
     static unsigned generate_seed() noexcept
     {
@@ -38,6 +38,8 @@ class uniform_reservoir
         return seed;
     }
 public:
+    using value_type = TElem;
+
     /**
      * \brief Construct a uniform reservoir
      */
@@ -70,23 +72,23 @@ public:
     }
 };
 
-template<typename TElem, int64_t TSize>
+template<typename TElem, std::size_t TSize>
 uniform_reservoir<TElem, TSize>::uniform_reservoir() noexcept :
         gen_(generate_seed()),
         count_(0)
 {
 }
 
-template<typename TElem, int64_t TSize>
+template<typename TElem, std::size_t TSize>
 uniform_reservoir<TElem, TSize>::uniform_reservoir(const uniform_reservoir &other) noexcept :
         gen_(generate_seed()),
         count_(other.count_.load())
 {
-    for (auto i = 0; i < count_; i++)
+    for (std::size_t i = 0; i < count_; i++)
         elems_[i] = other.elems_[i];
 }
 
-template<typename TElem, int64_t TSize>
+template<typename TElem, std::size_t TSize>
 uniform_reservoir<TElem, TSize> &uniform_reservoir<TElem, TSize>::operator=(const uniform_reservoir &other) noexcept
 {
     elems_ = other.elems_;
@@ -94,7 +96,7 @@ uniform_reservoir<TElem, TSize> &uniform_reservoir<TElem, TSize>::operator=(cons
     return *this;
 }
 
-template<typename TElem, int64_t TSize>
+template<typename TElem, std::size_t TSize>
 void uniform_reservoir<TElem, TSize>::update(const TElem &value) noexcept
 {
     auto c = count_.fetch_add(1);

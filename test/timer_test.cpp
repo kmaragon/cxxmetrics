@@ -3,14 +3,14 @@
 #include <simple_reservoir.hpp>
 
 using namespace cxxmetrics;
-using namespace cxxmetrics::literals;
+using namespace cxxmetrics_literals;
 using namespace std::chrono_literals;
 
 TEST_CASE("Timer Tests", "[timer]")
 {
-    using timer_t = timer<std::chrono::system_clock, simple_reservoir<std::chrono::system_clock::duration, 4>, true, 5_min, 1_min, 10_sec>;
+    using timer_t = timer<100_micro, std::chrono::system_clock, simple_reservoir<std::chrono::system_clock::duration, 4>, true, 5_min, 1_min, 10_sec>;
 
-    timer_t t(100us);
+    timer_t t;
     SECTION("Constant Timers snapshots produce expected results")
     {
         t.update(std::chrono::microseconds(1000));

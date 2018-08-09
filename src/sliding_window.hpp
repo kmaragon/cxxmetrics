@@ -142,7 +142,7 @@ public:
      * \brief the type of data that the sliding window is represented in based on the clock 'functor'
      */
     using window_type = typename internal::ewma<TClockGet>::clock_diff;
-
+    using value_type = TElem;
 private:
 
     class transform_iterator : public std::iterator<TElem, std::input_iterator_tag>
@@ -181,7 +181,7 @@ public:
      * \param window the size of the sliding window over which the reservoir tracks
      * \param clock the clock object to use for deriving timestamps
      */
-    explicit sliding_window_reservoir(const window_type &window, const TClockGet &clock = TClockGet()) noexcept;
+    explicit sliding_window_reservoir(const window_type &window = time::minutes(1), const TClockGet &clock = TClockGet()) noexcept;
 
     /**
      * \brief Copy constructor
