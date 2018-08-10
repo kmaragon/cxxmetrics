@@ -24,6 +24,8 @@ TEST_CASE("EWMA backwards clock skips", "[ewma]")
     mock_ewma<30, 1> e(clock);
 
     e.mark(1);
+    ++clock;
+    e.mark(0);
 
     clock = 2;
     e.mark(4);
@@ -33,13 +35,13 @@ TEST_CASE("EWMA backwards clock skips", "[ewma]")
 
 TEST_CASE("EMWA calculates fixed rate", "[ewma]")
 {
-    unsigned clock = 0;
+    unsigned clock = 1;
     mock_ewma<10, 1> e(clock);
 
     for (int i = 0; i <= 10; i++)
     {
-        clock++;
         e.mark(7);
+        clock++;
     }
 
     REQUIRE(round(e.rate()) == 7);
@@ -90,8 +92,8 @@ TEST_CASE("EWMA calculates after jump past window", "[ewma]")
 
     for (int i = 0; i <= 10; i++)
     {
-        clock++;
         e.mark(7);
+        clock++;
     }
 
     REQUIRE(round(e.rate()) == 7);
@@ -103,13 +105,13 @@ TEST_CASE("EWMA calculates after jump past window", "[ewma]")
 
 TEST_CASE("EWMA calculates after jump in window", "[ewma]")
 {
-    unsigned clock = 1;
+    unsigned clock = 0;
     mock_ewma<10, 1> e(clock);
 
     for (int i = 0; i <= 100; i++)
     {
-        clock++;
         e.mark(7);
+        clock++;
     }
 
     REQUIRE(round(e.rate() * 100) == 700);

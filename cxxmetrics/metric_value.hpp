@@ -456,7 +456,7 @@ public:
 
     void add(const variant_data& other) noexcept override
     {
-        dur_ += other.to_nanos(nullptr);
+        dur_ += std::chrono::duration_cast<std::chrono::duration<TRep, TPeriod>>(other.to_nanos(nullptr));
     }
 
     void multiply(const variant_data& other) noexcept override

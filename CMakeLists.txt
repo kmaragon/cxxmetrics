@@ -16,5 +16,9 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Coverage")
     link_libraries(gcov)
 endif()
 
+include(Conan)
+conan_include("conanfile.txt")
+
 add_subdirectory(cxxmetrics)
+add_subdirectory(cxxmetrics_prometheus)
 add_subdirectory(test)

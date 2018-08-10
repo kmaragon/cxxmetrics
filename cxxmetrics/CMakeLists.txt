@@ -1,7 +1,4 @@
 
-include(Conan)
-conan_include("conanfile.txt")
-
 macro(target_sources_local target) # https://gitlab.kitware.com/cmake/cmake/issues/17556
 	unset(_srcList)
 

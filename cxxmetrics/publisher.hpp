@@ -88,7 +88,7 @@ public:
 class quantile_visitor
 {
 public:
-    virtual void visit(const quantile& q, const metric_value& value) const = 0;
+    virtual void visit(const quantile& q, metric_value&& value) const = 0;
     virtual ~quantile_visitor() = default;
 };
 
@@ -103,9 +103,9 @@ class basic_quantile_options
                 handler_(std::forward<THandler>(handler))
         { }
 
-        void visit(const quantile& q, const metric_value& value) const override
+        void visit(const quantile& q, metric_value&& value) const override
         {
-            handler_(q, value);
+            handler_(q, std::move(value));
         }
     };
 
@@ -254,38 +254,45 @@ public:
  */
 class timer_publish_options : public histogram_publish_options, public meter_publish_options
 {
+    bool rates_;
 public:
     timer_publish_options(timer_publish_options&& other) noexcept :
             histogram_publish_options(std::move(other)),
-            meter_publish_options(std::move(other))
+            meter_publish_options(std::move(other)),
+            rates_(other.rates_)
     { }
 
-    timer_publish_options(const scale_factor& sf = scale_factor()) noexcept :
+    timer_publish_options(bool rates = true, const scale_factor& sf = scale_factor()) noexcept :
             histogram_publish_options(sf),
-            meter_publish_options(sf)
+            meter_publish_options(sf),
+            rates_(rates)
     { }
 
-    timer_publish_options(bool publish_count, const scale_factor& sf = scale_factor()) noexcept :
+    timer_publish_options(bool rates, bool publish_count, const scale_factor& sf = scale_factor()) noexcept :
             histogram_publish_options(publish_count, sf),
-            meter_publish_options(sf)
+            meter_publish_options(sf),
+            rates_(rates)
     { }
 
-    timer_publish_options(bool publish_count, bool publish_mean, const scale_factor& sf = scale_factor()) noexcept :
+    timer_publish_options(bool rates, bool publish_count, bool publish_mean, const scale_factor& sf = scale_factor()) noexcept :
             histogram_publish_options(publish_count, sf),
-            meter_publish_options(publish_mean, sf)
+            meter_publish_options(publish_mean, sf),
+            rates_(rates)
     { }
 
     template<typename TQuantileOptions, typename = typename std::enable_if<std::is_base_of<basic_quantile_options, TQuantileOptions>::value, void>::type>
-    timer_publish_options(TQuantileOptions&& quantile_options, bool publish_count = true, const scale_factor& sf = scale_factor()) :
+    timer_publish_options(TQuantileOptions&& quantile_options, bool rates, bool publish_count = true, const scale_factor& sf = scale_factor()) :
             histogram_publish_options(quantile_options, publish_count, sf),
-            meter_publish_options(sf)
+            meter_publish_options(sf),
+            rates_(rates)
     { }
 
 
     template<typename TQuantileOptions, typename = typename std::enable_if<std::is_base_of<basic_quantile_options, TQuantileOptions>::value, void>::type>
-    timer_publish_options(TQuantileOptions&& quantile_options, bool publish_count, bool publish_mean, const scale_factor& sf = scale_factor()) :
+    timer_publish_options(TQuantileOptions&& quantile_options, bool rates, bool publish_count, bool publish_mean, const scale_factor& sf = scale_factor()) :
             histogram_publish_options(quantile_options, publish_count, sf),
-            meter_publish_options(publish_mean, sf)
+            meter_publish_options(publish_mean, sf),
+            rates_(rates)
     { }
 
     timer_publish_options& operator=(timer_publish_options&& other) noexcept
@@ -293,6 +300,14 @@ public:
         histogram_publish_options::operator=(std::move(other));
         meter_publish_options::operator=(std::move(other));
         return *this;
+    }
+
+    /**
+     * \brief Whether or not the rates should be included in the timer data
+     */
+    bool include_rates() const
+    {
+        return rates_;
     }
 };
 

@@ -51,6 +51,26 @@ public:
     {
         return to_duration();
     }
+
+    period operator*(const period::value& p) const
+    {
+        return period(value_ * p);
+    }
+
+    period operator/(const period::value& p) const
+    {
+        return period(value_ / p);
+    }
+
+    period operator+(const period::value& p) const
+    {
+        return period(value_ + p);
+    }
+
+    period operator-(const period::value& p) const
+    {
+        return period(value_ - p);
+    }
 };
 
 template<typename TRep, typename TPer>

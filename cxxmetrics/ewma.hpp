@@ -82,6 +82,7 @@ private:
     std::atomic<TValue> rate_;
     clock_point last_;
     std::atomic<TValue> pending_;
+    std::atomic<bool> ticked_;
 
     static constexpr double get_alpha()
     {
@@ -116,8 +117,9 @@ template<typename TClockGet, period::value TWindow, period::value TInterval, typ
 ewma<TClockGet, TWindow, TInterval, TValue>::ewma(const TClockGet &clock) noexcept :
         clk_(clock),
         rate_(0),
-        last_{},
-        pending_(0)
+        last_(clk_()),
+        pending_(0),
+        ticked_(false)
 {
 }
 
@@ -126,7 +128,8 @@ ewma<TClockGet, TWindow, TInterval, TValue>::ewma(const ewma &c) noexcept :
     clk_(c.clk_),
     rate_(c.rate_.load()),
     last_(c.last_),
-    pending_(c.pending_.load())
+    pending_(c.pending_.load()),
+    ticked_(c.ticked_.load())
 {
 
 }
@@ -141,16 +144,8 @@ void ewma<TClockGet, TWindow, TInterval, TValue>::mark(TMark amount) noexcept
     if (now < last_)
         return;
 
-    if (last_ == clock_point{})
-    {
-        atomic_add(pending_, amount);
-        tick(now);
-    }
-    else
-    {
-        tick(now);
-        atomic_add(pending_, amount);
-    }
+    tick(now);
+    atomic_add(pending_, amount);
 }
 
 template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
@@ -185,25 +180,32 @@ TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) 
 
     auto pending = pending_.load();
     auto nrate = rate_.load();
-    if (last == clock_point{})
-    {
-        // use constexpr if with 17
-        if (TWrite)
-        {
-            // one thread sets the last timestamp
-            if (!pending_.compare_exchange_strong(pending, 0))
-                return pending; // someone else ticked from under us
 
-            if (rate_.compare_exchange_weak(nrate, pending))
-                last_ = at;
-        }
-
-        return pending;
-    }
-
-    // make sure that last_ didn't catch up with us
-    if ((at < last) || (at - last) < period(TInterval))
+    if (at < last)
         return nrate;
+
+    if (nrate == TValue{} && !ticked_.load())
+    {
+        if ((at - last) < period(TInterval))
+            return pending;
+
+        bool ticked = false;
+        if (ticked_.compare_exchange_weak(ticked, true))
+        {
+            // use constexpr if with 17
+            if (TWrite)
+            {
+                // one thread sets the last timestamp
+                if (!pending_.compare_exchange_weak(pending, 0))
+                    return pending; // someone else ticked from under us
+
+                if (rate_.compare_exchange_weak(nrate, pending))
+                    last_ = at;
+            }
+
+            return pending;
+        }
+    }
 
     // apply the pending value to our current rate
     // if someone else already snagged the pending value, start over
@@ -214,26 +216,25 @@ TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) 
     if (missed_intervals)
     {
         // we missed some intervals - we'll average in zeros
-        if ((at - last) > period(TWindow))
+        if ((at - last) > period(TWindow) && TWindow > TInterval)
         {
-            while ((at - last) > period(TWindow))
-            {
-                rate = sqrt(rate);
-                last += period(TWindow);
-            }
+            constexpr auto intervals_per_window = TWindow / TInterval;
+            period::value missed_windows = missed_intervals / intervals_per_window;
+            rate = pow(rate, 1/pow(missed_windows, 2));
 
             // figure out the missed intervals now
-            missed_intervals = ((at - last) / period(TInterval)) - 1;
+            missed_intervals -= (missed_windows * intervals_per_window);
         }
 
         for (int i = 0; i < missed_intervals; i++)
             rate = rate + (alpha_ * -rate);
     }
 
-    if (!TWrite)
+    // make sure that last_ didn't catch up with us
+    if (!TWrite || (at - last) < period(TInterval))
         return rate;
 
-    if (!pending_.compare_exchange_strong(pending, 0))
+    if (!pending_.compare_exchange_weak(pending, 0))
         return rate; // someone else already either ticked or added a pending value
 
     rate_.store(rate);

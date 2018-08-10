@@ -21,7 +21,16 @@ set(SOURCES
         main.cpp
 )
 
+set(PROMETHEUS_SOURCES
+        prometheus_publish_test.cpp
+        main.cpp
+)
+
 add_executable(cxxmetrics_test ${SOURCES})
 target_link_libraries(cxxmetrics_test CONAN_PKG::catch2 cxxmetrics -pthread)
 
+add_executable(cxxmetrics_prometheus_test ${PROMETHEUS_SOURCES})
+target_link_libraries(cxxmetrics_prometheus_test CONAN_PKG::catch2 cxxmetrics cxxmetrics_prometheus)
+
 add_coverage_run(cxxmetrics_coverage cxxmetrics_test)
+add_coverage_run(cxxmetrics_prometheus_coverage cxxmetrics_prometheus_test)

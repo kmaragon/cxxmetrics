@@ -126,10 +126,10 @@ TEST_CASE("Registry average aggregation", "[metrics_registry]")
 
     for (int i = 0; i < 20; i++)
     {
-        std::this_thread::sleep_for(50us);
         e1.mark(1000);
         e2.mark(8000);
         e3.mark(18000);
+        std::this_thread::sleep_for(50us);
     }
 
     metric_value total(0);
@@ -199,10 +199,10 @@ TEST_CASE("Registry meter aggregation", "[metrics_registry]")
 
     for (int i = 0; i < 50; i++)
     {
-        std::this_thread::sleep_for(interval.to_duration());
         m1.mark(1000);
         m2.mark(8000);
         m3.mark(18000);
+        std::this_thread::sleep_for(interval.to_duration());
     }
 
     subject.visit_registered_metrics([&](const metric_path& path, basic_registered_metric& metric) {

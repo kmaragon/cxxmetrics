@@ -556,7 +556,9 @@ public:
 class snapshot_visitor
 {
 public:
-    virtual void visit(const value_snapshot& value)
+    virtual void visit(const average_value_snapshot& value)
+    { }
+    virtual void visit(const cumulative_value_snapshot& value)
     { }
     virtual void visit(const meter_snapshot& meter)
     { }
@@ -618,7 +620,8 @@ public:
     invokable_snapshot_visitor(TVisitor&& visitor) :
             visitor_(std::forward<TVisitor>(visitor))
     { }
-    void visit(const value_snapshot& value) override { visit_hnd(value); }
+    void visit(const average_value_snapshot& value) override { visit_hnd(value); }
+    void visit(const cumulative_value_snapshot& value) override { visit_hnd(value); }
     void visit(const meter_snapshot& meter) override { visit_hnd(meter); }
     void visit(const histogram_snapshot& hist) override { visit_hnd(hist); }
     void visit(const timer_snapshot& timer) override { visit_hnd(timer); }

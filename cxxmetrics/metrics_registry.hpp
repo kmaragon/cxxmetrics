@@ -431,6 +431,8 @@ class metrics_registry
 
     friend class metrics_publisher<TRepository>;
 public:
+    using repository_type = TRepository;
+
     /**
      * \brief Construct the registry with the arguments being passed to the underlying repository
      */
