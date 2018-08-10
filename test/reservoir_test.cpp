@@ -1,7 +1,7 @@
 #include <catch.hpp>
-#include <simple_reservoir.hpp>
-#include <uniform_reservoir.hpp>
-#include <sliding_window.hpp>
+#include <cxxmetrics/simple_reservoir.hpp>
+#include <cxxmetrics/uniform_reservoir.hpp>
+#include <cxxmetrics/sliding_window.hpp>
 #include "helpers.hpp"
 
 using namespace std;

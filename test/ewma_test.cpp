@@ -1,6 +1,6 @@
 #include <catch.hpp>
-#include <ewma.hpp>
 #include <thread>
+#include <cxxmetrics/ewma.hpp>
 #include "helpers.hpp"
 
 using namespace std::chrono_literals;
@@ -33,13 +33,13 @@ TEST_CASE("EWMA backwards clock skips", "[ewma]")
 
 TEST_CASE("EMWA calculates fixed rate", "[ewma]")
 {
-    unsigned clock = 1;
+    unsigned clock = 0;
     mock_ewma<10, 1> e(clock);
 
     for (int i = 0; i <= 10; i++)
     {
-        e.mark(7);
         clock++;
+        e.mark(7);
     }
 
     REQUIRE(round(e.rate()) == 7);
@@ -85,13 +85,13 @@ TEST_CASE("EWMA calculates fixed rate threads", "[ewma]")
 
 TEST_CASE("EWMA calculates after jump past window", "[ewma]")
 {
-    unsigned clock = 1;
+    unsigned clock = 0;
     mock_ewma<10, 1> e(clock);
 
     for (int i = 0; i <= 10; i++)
     {
-        e.mark(7);
         clock++;
+        e.mark(7);
     }
 
     REQUIRE(round(e.rate()) == 7);

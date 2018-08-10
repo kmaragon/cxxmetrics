@@ -12,6 +12,7 @@ set(SOURCES
         meter_test.cpp
         metrics_registry_test.cpp
         #pool_test.cpp
+        publisher_tests.cpp
         reservoir_test.cpp
         ringbuf_test.cpp
         #skiplist_test.cpp

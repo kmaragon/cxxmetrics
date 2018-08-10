@@ -5,7 +5,7 @@
 
 #include <execinfo.h>
 
-#include "skiplist.hpp"
+#include "cxxmetrics/skiplist.hpp"
 
 using namespace std;
 using namespace cxxmetrics;

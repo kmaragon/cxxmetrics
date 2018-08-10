@@ -36,7 +36,7 @@ public:
     bool operator!=(const tag_collection& other) const;
 };
 
-bool tag_collection::operator==(const cxxmetrics::tag_collection &other) const
+inline bool tag_collection::operator==(const cxxmetrics::tag_collection &other) const
 {
     if (tags_.size() != other.tags_.size())
         return false;
@@ -51,7 +51,7 @@ bool tag_collection::operator==(const cxxmetrics::tag_collection &other) const
     return true;
 }
 
-bool tag_collection::operator!=(const cxxmetrics::tag_collection &other) const
+inline bool tag_collection::operator!=(const cxxmetrics::tag_collection &other) const
 {
     return !operator==(other);
 }

@@ -1,5 +1,5 @@
 #include <catch.hpp>
-#include <internal/atomic_lifo.hpp>
+#include <cxxmetrics/internal/atomic_lifo.hpp>
 #include <set>
 #include <thread>
 

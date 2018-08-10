@@ -1,5 +1,5 @@
 #include <catch.hpp>
-#include <ringbuf.hpp>
+#include <cxxmetrics/ringbuf.hpp>
 
 using namespace std;
 using namespace cxxmetrics::internal;

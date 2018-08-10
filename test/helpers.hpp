@@ -1,7 +1,3 @@
-//
-// Created by keef on 6/16/17.
-//
-
 #ifndef CXXMETRICS_HELPERS_HPP
 #define CXXMETRICS_HELPERS_HPP
 

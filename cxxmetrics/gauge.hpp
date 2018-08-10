@@ -293,7 +293,7 @@ struct default_metric_builder<cxxmetrics::gauge<TGaugeType *, TAggregation>>
     cxxmetrics::gauge<TGaugeType*, TAggregation> operator()() const
     {
         static TGaugeType *r = nullptr;
-        return cxxmetrics::gauge<TGaugeType, TAggregation>(r);
+        return cxxmetrics::gauge<TGaugeType*, TAggregation>(r);
     }
 };
 

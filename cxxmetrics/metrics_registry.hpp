@@ -1,9 +1,10 @@
 #ifndef CXXMETRICS_METRICS_REGISTRY_HPP
 #define CXXMETRICS_METRICS_REGISTRY_HPP
 
+// TODO: use shared_mutexes with C++17
 #include <mutex>
 #include <memory>
-#include "metric_path.hpp"
+#include "publisher.hpp"
 #include "tag_collection.hpp"
 #include "counter.hpp"
 #include "ewma.hpp"
@@ -99,6 +100,9 @@ class basic_registered_metric
 {
     std::string type_;
 
+    std::unordered_map<std::string, std::unique_ptr<basic_publish_options>> pubdata_;
+    mutable std::mutex pubdatalock_;
+
     template<typename TMetricType, typename... TConstructorArgs>
     std::shared_ptr<TMetricType> tagged(const tag_collection& tags, TConstructorArgs&&... args)
     {
@@ -125,8 +129,36 @@ class basic_registered_metric
         return added;
     }
 
+    template<typename TDataType, typename... TConstructArgs>
+    typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value, TDataType>::type&
+    get_or_create_publish_data(TConstructArgs&&... args)
+    {
+        std::lock_guard<std::mutex> lock(pubdatalock_);
+        auto key = ctti::nameof<TDataType>().str();
+        auto& ptr = pubdata_[key];
+
+        if (!ptr)
+            ptr = std::make_unique<TDataType>(std::forward<TConstructArgs>(args)...);
+
+        return static_cast<TDataType&>(*ptr);
+    }
+
+    template<typename TDataType>
+    typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value, TDataType>::type*
+    try_get_publish_data() const
+    {
+        std::lock_guard<std::mutex> lock(pubdatalock_);
+        auto fnd = pubdata_.find(ctti::nameof<TDataType>().str());
+        if (fnd == pubdata_.end())
+            return nullptr;
+
+        return static_cast<TDataType*>(fnd->second.get());
+    }
+
     template<typename TRepository>
     friend class metrics_registry;
+    template<typename TRepository>
+    friend class metrics_publisher;
 protected:
     template<typename TMetricType>
     struct basic_metric_builder
@@ -280,31 +312,39 @@ std::shared_ptr<internal::metric> registered_metric<TMetricType>::child(const cx
 /**
  * \brief The default metric repository that registers metrics in a standard unordered map with a mutex lock
  */
-template<typename TAlloc>
+template<typename TAlloc = std::allocator<char>>
 class basic_default_repository
 {
     std::unordered_map<metric_path, std::unique_ptr<basic_registered_metric>, std::hash<metric_path>, std::equal_to<metric_path>, TAlloc> metrics_;
-    std::mutex lock_;
+    std::unordered_map<std::string, std::unique_ptr<basic_publish_options>, std::hash<std::string>, std::equal_to<std::string>, TAlloc> data_;
+
+    mutable std::mutex metriclock_;
+    mutable std::mutex datalock_;
+
 public:
     basic_default_repository() = default;
 
     template<typename TMetricPtrBuilder>
     basic_registered_metric& get_or_add(const metric_path& name, const TMetricPtrBuilder& builder);
+    basic_registered_metric* get(const metric_path& name);
 
     template<typename THandler>
     void visit(THandler&& handler);
 
-    const tag_collection& tags(const tag_collection& tags) const
-    {
-        return tags;
-    }
+    constexpr const tag_collection& tags(const tag_collection& tags) const noexcept { return tags; }
+
+    template<typename TDataType, typename... TConstructArgs>
+    typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value, TDataType>::type& get_publish_data(TConstructArgs&&... args);
+
+    template<typename TDataType>
+    typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value, TDataType>::type* get_publish_data() const;
 };
 
 template<typename TAlloc>
 template<typename TMetricPtrBuilder>
 basic_registered_metric& basic_default_repository<TAlloc>::get_or_add(const metric_path& name, const TMetricPtrBuilder& builder)
 {
-    std::lock_guard<std::mutex> lock(lock_);
+    std::lock_guard<std::mutex> lock(metriclock_);
     auto existing = metrics_.find(name);
 
     if (existing == metrics_.end())
@@ -317,12 +357,53 @@ basic_registered_metric& basic_default_repository<TAlloc>::get_or_add(const metr
 }
 
 template<typename TAlloc>
+basic_registered_metric* basic_default_repository<TAlloc>::get(const metric_path& name)
+{
+    std::lock_guard<std::mutex> lock(metriclock_);
+    auto existing = metrics_.find(name);
+
+    if (existing == metrics_.end())
+        return nullptr;
+
+    return existing->second.get();
+}
+
+template<typename TAlloc>
 template<typename THandler>
 void basic_default_repository<TAlloc>::visit(THandler&& handler)
 {
-    std::lock_guard<std::mutex> lock(lock_);
+    std::lock_guard<std::mutex> lock(metriclock_);
     for (auto& pair : metrics_)
         handler(pair.first, *pair.second);
+}
+
+template<typename TAlloc>
+template<typename TDataType, typename... TConstructArgs>
+typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value, TDataType>::type&
+basic_default_repository<TAlloc>::get_publish_data(TConstructArgs&&... args)
+{
+    std::lock_guard<std::mutex> lock(datalock_);
+    auto key = ctti::nameof<TDataType>().str();
+    auto& ptr = data_[key];
+
+    if (!ptr)
+        ptr = std::make_unique<TDataType>(std::forward<TConstructArgs>(args)...);
+
+    return static_cast<TDataType&>(*ptr);
+}
+
+template<typename TAlloc>
+template<typename TDataType>
+typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value, TDataType>::type*
+basic_default_repository<TAlloc>::get_publish_data() const
+{
+    std::lock_guard<std::mutex> lock(datalock_);
+    auto key = ctti::nameof<TDataType>().str();
+    auto fnd = data_.find(ctti::nameof<TDataType>().str());
+    if (fnd == data_.end())
+        return nullptr;
+
+    return static_cast<TDataType*>(fnd->second.get());
 }
 
 using default_repository = basic_default_repository<std::allocator<std::pair<metric_path, basic_registered_metric>>>;
@@ -343,6 +424,12 @@ class metrics_registry
     template<typename TMetricType, typename... TConstructorArgs>
     std::shared_ptr<TMetricType> get(const metric_path& path, const tag_collection& tags, TConstructorArgs&&... args);
 
+    template<typename TDataType, typename... TConstructArgs>
+    TDataType& get_publish_data(TConstructArgs&&... args) { return repo_.template get_publish_data<TDataType>(std::forward<TConstructArgs>(args)...); }
+
+    auto* try_get(const metric_path& name) { return repo_.get(name); }
+
+    friend class metrics_publisher<TRepository>;
 public:
     /**
      * \brief Construct the registry with the arguments being passed to the underlying repository
@@ -355,6 +442,30 @@ public:
             repo_(std::move(other.repo_))
     { }
     ~metrics_registry() = default;
+
+    /**
+     * \brief Get the repository wide publish options
+     */
+    const cxxmetrics::publish_options& publish_options() const;
+
+    /**
+     * \brief Set the repository wide publish options
+     *
+     * \note individual metrics may override these
+     *
+     * \param options the new options for the repository
+     */
+    void publish_options(cxxmetrics::publish_options&& options);
+
+    /**
+     * \brief Set the publish option overrides for a single metric
+     *
+     * if the metric provided isn't registered, this method does nothing
+     *
+     * \param name the metric on which to set the options
+     * \param options the new options for the metric
+     */
+    void publish_options(const metric_path& name, cxxmetrics::publish_options&& options);
 
     /**
      *  \brief Run a visitor on all of the registered metrics
@@ -509,6 +620,8 @@ public:
             TReservoir&& reservoir = TReservoir(),
             const tag_collection& tags = tag_collection());
 
+#if __cplusplus >= 201700
+
     /**
      * A wrapper for timer with some sensible defaults
      *
@@ -525,6 +638,8 @@ public:
     {
         return this->template timer<TRateInterval, std::chrono::steady_clock, TReservoir<typename std::chrono::steady_clock::duration, TSize>, TRateWindows...>(name, TReservoir<typename std::chrono::steady_clock::duration, TSize>(), tags);
     }
+#endif
+
 };
 
 template<typename TRepository>
@@ -532,6 +647,33 @@ template<typename... TRepoArgs>
 metrics_registry<TRepository>::metrics_registry(TRepoArgs &&... args) :
         repo_(std::forward<TRepoArgs>(args)...)
 { }
+
+template<typename TRepository>
+const cxxmetrics::publish_options& metrics_registry<TRepository>::publish_options() const
+{
+    static const cxxmetrics::publish_options defaultopts;
+    auto existing = repo_.template get_publish_data<cxxmetrics::publish_options>();
+    if (existing == nullptr)
+        return defaultopts;
+
+    return *existing;
+}
+
+template<typename TRepository>
+void metrics_registry<TRepository>::publish_options(cxxmetrics::publish_options&& options)
+{
+    repo_.template get_publish_data<cxxmetrics::publish_options>() = std::move(options);
+}
+
+template<typename TRepository>
+void metrics_registry<TRepository>::publish_options(const metric_path& path, cxxmetrics::publish_options&& options)
+{
+    auto l = try_get(path);
+    if (l == nullptr)
+        return;
+
+    l->template get_or_create_publish_data<cxxmetrics::publish_options>() = std::move(options);
+}
 
 template<typename TRepository>
 template<typename TMetricType>
@@ -631,5 +773,7 @@ std::shared_ptr<cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindow
 }
 
 }
+
+#include "publisher_impl.hpp"
 
 #endif //CXXMETRICS_METRICS_REGISTRY_HPP

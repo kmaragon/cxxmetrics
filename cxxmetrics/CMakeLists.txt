@@ -30,6 +30,8 @@ set(HEADERS
         metric_value.hpp
         metrics_registry.hpp
         pool.hpp
+        publisher.hpp
+        publisher_impl.hpp
         ringbuf.hpp
         simple_reservoir.hpp
         skiplist.hpp
@@ -41,7 +43,7 @@ set(HEADERS
 )
 
 add_library(cxxmetrics INTERFACE)
-target_include_directories(cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../")
 target_sources_local(cxxmetrics INTERFACE ${HEADERS})
 target_link_libraries(cxxmetrics INTERFACE atomic CONAN_PKG::ctti)
 

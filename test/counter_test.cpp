@@ -1,5 +1,5 @@
 #include <catch.hpp>
-#include <counter.hpp>
+#include <cxxmetrics/counter.hpp>
 
 using namespace cxxmetrics;
 

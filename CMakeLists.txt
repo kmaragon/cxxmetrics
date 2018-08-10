@@ -16,5 +16,5 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Coverage")
     link_libraries(gcov)
 endif()
 
-add_subdirectory(src)
+add_subdirectory(cxxmetrics)
 add_subdirectory(test)

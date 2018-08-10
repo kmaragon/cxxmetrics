@@ -1,9 +1,9 @@
 #include <catch.hpp>
 #include <thread>
-#include <metrics_registry.hpp>
-#include <simple_reservoir.hpp>
-#include <uniform_reservoir.hpp>
-#include <sliding_window.hpp>
+#include <cxxmetrics/metrics_registry.hpp>
+#include <cxxmetrics/simple_reservoir.hpp>
+#include <cxxmetrics/uniform_reservoir.hpp>
+#include <cxxmetrics/sliding_window.hpp>
 
 using namespace std::chrono_literals;
 using namespace cxxmetrics;
@@ -94,7 +94,6 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
     subject.histogram("H"_m/"istogramW", sliding_window_reservoir<long, 100>(100s));
     subject.meter<1_sec, 1_min, 1_sec, 5_min>("Meter");
     subject.timer<1_sec, std::chrono::system_clock, simple_reservoir<typename std::chrono::system_clock::duration, 1024>, 1_min, 5_min>("TimerVerbose");
-    subject.timer<1_sec, uniform_reservoir, 1024, 1_min, 5_min>("TimerSimpler");
     REQUIRE(subject.register_existing("MyCounter"_m/"Alias", myCounter));
 
     subject.visit_registered_metrics([&instances, &names](const metric_path& path, basic_registered_metric& metric) {
@@ -104,7 +103,7 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
         });
     });
 
-    REQUIRE(names == 10);
+    REQUIRE(names == 9);
     REQUIRE(instances == names);
 
     names = 0;
@@ -198,7 +197,7 @@ TEST_CASE("Registry meter aggregation", "[metrics_registry]")
     metric_value m100(0);
     metric_value m200(0);
 
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 50; i++)
     {
         std::this_thread::sleep_for(interval.to_duration());
         m1.mark(1000);

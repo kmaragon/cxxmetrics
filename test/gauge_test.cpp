@@ -1,5 +1,5 @@
 #include <catch.hpp>
-#include <gauge.hpp>
+#include <cxxmetrics/gauge.hpp>
 
 using namespace std;
 using namespace cxxmetrics;

@@ -1,6 +1,6 @@
 #include <catch.hpp>
-#include <timer.hpp>
-#include <simple_reservoir.hpp>
+#include <cxxmetrics/timer.hpp>
+#include <cxxmetrics/simple_reservoir.hpp>
 
 using namespace cxxmetrics;
 using namespace cxxmetrics_literals;

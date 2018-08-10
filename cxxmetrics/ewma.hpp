@@ -76,18 +76,20 @@ public:
     using clock_diff = typename clock_traits<TClockGet>::clock_diff;
 
 private:
-    TClockGet clk_;
     static long double alpha_;
+
+    TClockGet clk_;
     std::atomic<TValue> rate_;
     clock_point last_;
     std::atomic<TValue> pending_;
 
     static constexpr double get_alpha()
     {
-        return 1 - exp((TInterval * -1.0l) / (TWindow * 1.0l));
+        return 1 - exp((TInterval * -1.0l) / (TWindow * 2.0l));
     }
 
-    void tick(const clock_point &at) noexcept;
+    template<bool TWrite = true>
+    TValue tick(const clock_point &at) noexcept;
 
 public:
     ewma(const TClockGet &clock = TClockGet()) noexcept;
@@ -139,20 +141,16 @@ void ewma<TClockGet, TWindow, TInterval, TValue>::mark(TMark amount) noexcept
     if (now < last_)
         return;
 
-    // See if we crossed the interval threshold. If so we need to tick
-    if (last_ != clock_point{})
+    if (last_ == clock_point{})
     {
-        if ((now - last_) >= period(TInterval))
-            tick(now);
-        atomic_add(pending_, amount);
-    }
-    else
-    {
-        // the clock hasn't started yet - add the item to pending and attempt to tick
         atomic_add(pending_, amount);
         tick(now);
     }
-
+    else
+    {
+        tick(now);
+        atomic_add(pending_, amount);
+    }
 }
 
 template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
@@ -165,49 +163,47 @@ template<typename TClockGet, period::value TWindow, period::value TInterval, typ
 TValue ewma<TClockGet, TWindow, TInterval, TValue>::rate() noexcept
 {
     auto now = clk_();
-
-    // See if we crossed the interval threshold. If so we need to tick
-    if (last_ != clock_point{} && now > last_ && (now - last_) >= period(TInterval))
-        tick(now);
-
-    return rate_.load();
+    return tick(now);
 }
 
 template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
 TValue ewma<TClockGet, TWindow, TInterval, TValue>::rate() const noexcept
 {
-    auto rate = rate_.load();
-    if (rate < 0)
-        return 0;
-
-    return rate;
+    auto now = clk_();
+    // the const_cast is safe with the false template parameter
+    return const_cast<ewma*>(this)->tick<false>(now);
 }
 
 template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>
-void ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) noexcept
+template<bool TWrite>
+TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) noexcept
 {
     int missed_intervals;
     clock_point last;
 
-    auto pending = pending_.load();
-
-    auto nrate = rate_.load();
     last = last_;
+
+    auto pending = pending_.load();
+    auto nrate = rate_.load();
     if (last == clock_point{})
     {
-        // one thread sets the last timestamp
-        if (!pending_.compare_exchange_strong(pending, 0))
-            return; // someone else ticked from under us
+        // use constexpr if with 17
+        if (TWrite)
+        {
+            // one thread sets the last timestamp
+            if (!pending_.compare_exchange_strong(pending, 0))
+                return pending; // someone else ticked from under us
 
-        if (rate_.compare_exchange_weak(nrate, pending))
-            last_ = at;
+            if (rate_.compare_exchange_weak(nrate, pending))
+                last_ = at;
+        }
 
-        return;
+        return pending;
     }
 
     // make sure that last_ didn't catch up with us
-    if ((at - last) < period(TInterval))
-        return;
+    if ((at < last) || (at - last) < period(TInterval))
+        return nrate;
 
     // apply the pending value to our current rate
     // if someone else already snagged the pending value, start over
@@ -234,12 +230,17 @@ void ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) no
             rate = rate + (alpha_ * -rate);
     }
 
+    if (!TWrite)
+        return rate;
+
     if (!pending_.compare_exchange_strong(pending, 0))
-        return; // someone else already either ticked or added a pending value
+        return rate; // someone else already either ticked or added a pending value
 
     rate_.store(rate);
     if (last_ < at)
         last_ = at;
+
+    return rate;
 }
 
 template<typename TClockGet, period::value TWindow, period::value TInterval, typename TValue>

@@ -76,7 +76,7 @@ public:
     }
 };
 
-std::string metric_path::join(const std::string &delim) const
+inline std::string metric_path::join(const std::string &delim) const
 {
     if (paths_.empty())
         return "";
@@ -100,7 +100,7 @@ std::string metric_path::join(const std::string &delim) const
     return result;
 }
 
-bool metric_path::operator==(const cxxmetrics::metric_path &other) const
+inline bool metric_path::operator==(const cxxmetrics::metric_path &other) const
 {
     if (paths_.size() != other.paths_.size())
         return false;
@@ -114,7 +114,7 @@ bool metric_path::operator==(const cxxmetrics::metric_path &other) const
     return true;
 }
 
-bool metric_path::operator!=(const cxxmetrics::metric_path &other) const
+inline bool metric_path::operator!=(const cxxmetrics::metric_path &other) const
 {
     return !(operator==(other));
 }

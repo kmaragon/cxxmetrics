@@ -15,9 +15,9 @@ public:
     constexpr time_window(unsigned long long value) :
             value_(value) {}
 
-    constexpr operator templates::duration_type()
+    constexpr operator templates::sortable_template_type()
     {
-        return (templates::duration_type) value_;
+        return (templates::sortable_template_type) value_;
     }
 
 };
@@ -28,7 +28,7 @@ public:
 class period
 {
 public:
-    using value = templates::duration_type;
+    using value = templates::sortable_template_type;
 
 private:
     const value value_;
@@ -37,9 +37,9 @@ public:
     constexpr period(value v) :
             value_(v) {}
 
-    constexpr operator templates::duration_type() const
+    constexpr operator templates::sortable_template_type() const
     {
-        return (templates::duration_type) value_;
+        return (templates::sortable_template_type) value_;
     }
 
     constexpr std::chrono::steady_clock::duration to_duration() const

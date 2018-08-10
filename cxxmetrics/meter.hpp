@@ -415,7 +415,7 @@ template<period::value TInterval, typename TWindows>
 class meter_builder;
 
 template<period::value TInterval, period::value ...TWindows>
-class meter_builder<TInterval, templates::duration_collection<TWindows...>> : public meter<TInterval, TWindows...>
+class meter_builder<TInterval, templates::sortable_template_collection<TWindows...>> : public meter<TInterval, TWindows...>
 {
 public:
     meter_builder() = default;

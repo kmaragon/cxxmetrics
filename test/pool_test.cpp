@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <execinfo.h>
-#include <pool.hpp>
+#include <cxxmetrics/pool.hpp>
 
 using namespace cxxmetrics::internal;
 using namespace std;

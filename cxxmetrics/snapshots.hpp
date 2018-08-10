@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include "meta.hpp"
 #include "metric_value.hpp"
 
 namespace cxxmetrics
@@ -185,9 +186,9 @@ public:
 class quantile
 {
     long double value_;
-    static constexpr uint64_t max = static_cast<uint64_t>(~(static_cast<uint32_t>(0)));
+    static constexpr templates::sortable_template_type max = static_cast<templates::sortable_template_type>(~(static_cast<uint32_t>(0)));
 public:
-    using value = uint64_t;
+    using value = templates::sortable_template_type;
 
     constexpr quantile(value v) :
             value_((v * 100.0) / max)
@@ -199,16 +200,26 @@ public:
     {
     }
 
+    /**
+     * \brief probably best not to use this. It exists for the template parameters to work until C++ supports user type template params
+     */
     constexpr operator value()
     {
         return (max / 100.0) * value_;
     }
 
-    constexpr operator long double()
+    /**
+     * \brief Get the percentile that this quantile represents
+     */
+    constexpr long double percentile() const
     {
         return value_;
     }
 
+    constexpr operator long double()
+    {
+        return percentile();
+    }
 };
 
 /**
