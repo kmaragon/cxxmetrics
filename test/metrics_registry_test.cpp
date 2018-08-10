@@ -139,7 +139,7 @@ TEST_CASE("Registry average aggregation", "[metrics_registry]")
         });
     });
 
-    REQUIRE(round(total) == 9000);
+    REQUIRE(round(total / metric_value(1000.0)) == 9);
 }
 
 TEST_CASE("Registry histogram aggregation", "[metrics_registry]")
