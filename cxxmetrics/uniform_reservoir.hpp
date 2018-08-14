@@ -68,7 +68,7 @@ public:
      */
     reservoir_snapshot snapshot() const noexcept
     {
-        return reservoir_snapshot(&elems_[0], std::min(count_.load(), TSize));
+        return reservoir_snapshot(&elems_[0], std::min(count_.load(), static_cast<decltype(count_.load())>(TSize)));
     }
 };
 

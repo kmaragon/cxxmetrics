@@ -1,7 +1,6 @@
 #ifndef CXXMETRICS_TIMER_HPP
 #define CXXMETRICS_TIMER_HPP
 
-#include <optional>
 #include "histogram.hpp"
 #include "meter.hpp"
 #include "uniform_reservoir.hpp"
