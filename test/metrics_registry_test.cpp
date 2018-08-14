@@ -223,7 +223,7 @@ TEST_CASE("Registry meter aggregation", "[metrics_registry]")
     WARN("Mean = " << mean << ", m50 = " << m50 << ", m100 = " << m100 << ", m200 = " << m200);
 
     // with the overhead of other stuff happening, the rate won't quite bit 9000
-    REQUIRE(round(m50 / metric_value(100.0)) == 90);
-    REQUIRE(round(m100 / metric_value(100.0)) == 90);
-    REQUIRE(round(m200 / metric_value(100.0)) == 90);
+    REQUIRE(round(m50 / metric_value(1000.0)) == 9);
+    REQUIRE(round(m100 / metric_value(1000.0)) == 9);
+    REQUIRE(round(m200 / metric_value(1000.0)) == 9);
 }

@@ -158,11 +158,13 @@ private:
     template<period::value... TPeriods>
     struct each_fn
     {
-        constexpr void doeach(_meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
+        template<typename _T>
+        constexpr void doeach(_meter_impl_base<TClockGet, TInterval, TWindows...> &on, const _T &fn)
         {
         }
 
-        constexpr void doeach(const _meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
+        template<typename _T>
+        constexpr void doeach(const _meter_impl_base<TClockGet, TInterval, TWindows...> &on, const _T &fn)
         {
         }
     };
@@ -171,13 +173,16 @@ private:
     struct each_fn<TCur, TPeriods...>
     {
         each_fn<TPeriods...> next;
-        constexpr void doeach(_meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
+
+        template<typename _T>
+        constexpr void doeach(_meter_impl_base<TClockGet, TInterval, TWindows...> &on, const _T &fn)
         {
             fn(meter_rate(period(TCur).to_duration(), on.get_rate<TCur>()));
             next.doeach(on, fn);
         }
 
-        constexpr void doeach(const _meter_impl_base<TClockGet, TInterval, TWindows...> &on, const auto &fn)
+        template<typename _T>
+        constexpr void doeach(const _meter_impl_base<TClockGet, TInterval, TWindows...> &on, const _T &fn)
         {
             fn(meter_rate(period(TCur).to_duration(), on.get_rate<TCur>()));
             next.doeach(on, fn);

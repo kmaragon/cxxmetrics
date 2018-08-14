@@ -41,13 +41,19 @@ class primitive_gauge : gauge<TGaugeType, TAggregation>
     TGaugeType value_;
 public:
     primitive_gauge(const TGaugeType& initial_value = TGaugeType()) noexcept;
-    primitive_gauge(const primitive_gauge& copy) noexcept = default;
-    primitive_gauge(primitive_gauge&& mv) noexcept = default;
+    primitive_gauge(const primitive_gauge& copy) = default;
+    primitive_gauge(primitive_gauge&& mv) :
+            value_(std::forward<TGaugeType>(mv.value_))
+    { }
     ~primitive_gauge() = default;
 
     primitive_gauge& operator=(const TGaugeType& value) noexcept;
-    primitive_gauge& operator=(const primitive_gauge& other) noexcept = default;
-    primitive_gauge& operator=(primitive_gauge&& other) noexcept = default;
+    primitive_gauge& operator=(const primitive_gauge& other) = default;
+
+    primitive_gauge& operator=(primitive_gauge&& other) {
+        value_ = std::move(other.value_);
+        return *this;
+    }
 
     void set(TGaugeType value) noexcept;
 
@@ -102,13 +108,19 @@ public:
     using gauge_type = typename functional_gauge_info<TFn>::gauge_type;
 
     functional_gauge(const TFn& fn) noexcept;
-    functional_gauge(const functional_gauge& copy) noexcept = default;
-    functional_gauge(functional_gauge&& mv) noexcept = default;
+    functional_gauge(const functional_gauge& copy) = default;
+    functional_gauge(functional_gauge&& mv) :
+            fn_(std::forward<TFn>(mv.fn_))
+    { }
 
     ~functional_gauge() = default;
 
-    functional_gauge& operator=(const functional_gauge& other) noexcept = default;
-    functional_gauge& operator=(functional_gauge&& mv) noexcept = default;
+    functional_gauge& operator=(const functional_gauge& other) = default;
+    functional_gauge& operator=(functional_gauge&& mv)
+    {
+        fn_ = std::move(mv.fn_);
+        return *this;
+    }
 
     gauge_type get() noexcept override;
     gauge_type get() const noexcept override;
