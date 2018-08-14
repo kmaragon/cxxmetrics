@@ -122,7 +122,7 @@ struct prometheus_time_window_t
 };
 
 template<typename TRep, typename TPer>
-prometheus_time_window_t<TRep, TPer> window(const std::chrono::duration<TRep, TPer>& d)
+inline prometheus_time_window_t<TRep, TPer> window(const std::chrono::duration<TRep, TPer>& d)
 {
     return prometheus_time_window_t<TRep, TPer>(d);
 }
@@ -139,7 +139,7 @@ struct prometheus_tags_t
     prometheus_tags_t(const cxxmetrics::tag_collection& t) : tags(t) { }
 };
 
-prometheus_tags_t tags(const cxxmetrics::tag_collection& tags)
+inline prometheus_tags_t tags(const cxxmetrics::tag_collection& tags)
 {
     return prometheus_tags_t(tags);
 }
