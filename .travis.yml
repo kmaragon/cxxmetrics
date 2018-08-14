@@ -1,7 +1,7 @@
 
 env:
    global:
-     - CONAN_REFERENCE: "cxxmetrics/0.0.1"
+     - CONAN_REFERENCE: "cxxmetrics/0.0.2"
      - CONAN_USERNAME: "kmaragon"
      - CONAN_LOGIN_USERNAME: "kmaragon"
      - CONAN_CHANNEL: "stable"
@@ -35,17 +35,17 @@ matrix:
       - <<: *linux
         env: CONAN_CLANG_VERSIONS=5.0 CONAN_DOCKER_IMAGE=lasote/conanclang50
 
-      - <<: *osx
-        osx_image: xcode8.3
-        env: CONAN_APPLE_CLANG_VERSIONS=8.1
+#      - <<: *osx
+#        osx_image: xcode8.3
+#        env: CONAN_APPLE_CLANG_VERSIONS=8.1
 
-      - <<: *osx
-        osx_image: xcode9.2
-        env: CONAN_APPLE_CLANG_VERSIONS=9.0
+#      - <<: *osx
+#        osx_image: xcode9.2
+#        env: CONAN_APPLE_CLANG_VERSIONS=9.0
 
-      - <<: *osx
-        osx_image: xcode9.3
-        env: CONAN_APPLE_CLANG_VERSIONS=9.1
+#      - <<: *osx
+#        osx_image: xcode9.3
+#        env: CONAN_APPLE_CLANG_VERSIONS=9.1
 
 install:
   - chmod +x .travis/install.sh
