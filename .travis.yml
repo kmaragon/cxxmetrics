@@ -5,6 +5,7 @@ env:
      - CONAN_USERNAME: "kmaragon"
      - CONAN_LOGIN_USERNAME: "kmaragon"
      - CONAN_CHANNEL: "stable"
+     - CONAN_REMOTES: "https://api.bintray.com/conan/manu343726/conan-packages"
      
 linux: &linux
    os: linux

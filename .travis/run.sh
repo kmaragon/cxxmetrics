@@ -10,5 +10,4 @@ if [[ "$(uname -s)" == 'Darwin' ]]; then
     pyenv activate conan
 fi
 
-conan remote add manu343726 "https://api.bintray.com/conan/manu343726/conan-packages"
 python build.py
