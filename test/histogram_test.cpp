@@ -22,8 +22,8 @@ TEST_CASE("Histogram sanity check", "[histogram]")
 
     REQUIRE_THAT(s.min(), Catch::WithinULP(10.0, 1));
     REQUIRE_THAT(s.max(), Catch::WithinULP(45.0, 1));
-    REQUIRE(abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
-    REQUIRE(abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
     REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
     REQUIRE(s.count() == 8);
 }

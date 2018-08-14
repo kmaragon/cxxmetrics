@@ -22,8 +22,8 @@ TEST_CASE("Uniform Reservoir on exact count", "[reservoir]")
 
     REQUIRE_THAT(s.min(), Catch::WithinULP(10.0, 1));
     REQUIRE_THAT(s.max(), Catch::WithinULP(45.0, 1));
-    REQUIRE(abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
-    REQUIRE(abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
     REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
 
     uniform_reservoir<double, 5> q = r;
@@ -44,10 +44,10 @@ TEST_CASE("Uniform Reservoir with overflow", "[reservoir]")
     auto mean = s.mean();
     auto p50 = s.value<50_p>();
 
-    REQUIRE(abs(static_cast<double>(min) - 100) < 20);
-    REQUIRE(abs(static_cast<double>(max) - 200) < 20);
-    REQUIRE(abs(static_cast<double>(mean) - 150) < 20);
-    REQUIRE(abs(static_cast<double>(p50) - 150) < 20);
+    REQUIRE(std::abs(static_cast<double>(min) - 100) < 20);
+    REQUIRE(std::abs(static_cast<double>(max) - 200) < 20);
+    REQUIRE(std::abs(static_cast<double>(mean) - 150) < 20);
+    REQUIRE(std::abs(static_cast<double>(p50) - 150) < 20);
 }
 
 TEST_CASE("Simple Reservoir overflow", "[reservoir]")
@@ -67,8 +67,8 @@ TEST_CASE("Simple Reservoir overflow", "[reservoir]")
 
     REQUIRE_THAT(s.min(), Catch::WithinULP(10.0, 1));
     REQUIRE_THAT(s.max(), Catch::WithinULP(45.0, 1));
-    REQUIRE(abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
-    REQUIRE(abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
     REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
 
     simple_reservoir<double, 5> q = r;
@@ -105,8 +105,8 @@ TEST_CASE("Sliding Window Reservoir only gets window data", "[reservoir]")
 
     REQUIRE_THAT(s.min(), Catch::WithinULP(20.0, 1));
     REQUIRE_THAT(s.max(), Catch::WithinULP(60.0, 1));
-    REQUIRE(abs(static_cast<double>(s.value<99_p>()) - 60.0) < 1);
-    REQUIRE(abs(static_cast<double>(s.value<60_p>()) - 40.0) <= 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<99_p>()) - 60.0) < 1);
+    REQUIRE(std::abs(static_cast<double>(s.value<60_p>()) - 40.0) <= 1);
     REQUIRE_THAT(s.mean(), Catch::WithinULP(37.5, 1));
 
     sliding_window_reservoir<double, 10, mock_clock> q = r;
