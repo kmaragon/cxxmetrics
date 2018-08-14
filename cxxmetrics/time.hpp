@@ -37,11 +37,6 @@ public:
     constexpr period(value v) :
             value_(v) {}
 
-    template<typename TRep, typename TPer>
-    explicit constexpr period(const std::chrono::duration<TRep, TPer>& dur) :
-            value_(std::chrono::duration_cast<std::chrono::microseconds>(dur).count())
-    { }
-
     constexpr operator templates::sortable_template_type() const
     {
         return (templates::sortable_template_type) value_;
@@ -50,11 +45,6 @@ public:
     constexpr std::chrono::steady_clock::duration to_duration() const
     {
         return std::chrono::microseconds(value_);
-    }
-
-    period::value to_value() const
-    {
-        return value_;
     }
 
     constexpr operator std::chrono::steady_clock::duration() const

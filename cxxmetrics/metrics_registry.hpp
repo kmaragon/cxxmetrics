@@ -315,10 +315,8 @@ std::shared_ptr<internal::metric> registered_metric<TMetricType>::child(const cx
 template<typename TAlloc = std::allocator<char>>
 class basic_default_repository
 {
-    using metrics_allocator = typename std::allocator_traits<TAlloc>::template rebind_alloc<std::pair<metric_path, std::unique_ptr<basic_registered_metric>>>;
-    using data_allocator = typename std::allocator_traits<TAlloc>::template rebind_alloc<std::pair<std::string, std::unique_ptr<basic_publish_options>>>;
-    std::unordered_map<metric_path, std::unique_ptr<basic_registered_metric>, std::hash<metric_path>, std::equal_to<metric_path>, metrics_allocator> metrics_;
-    std::unordered_map<std::string, std::unique_ptr<basic_publish_options>, std::hash<std::string>, std::equal_to<std::string>, data_allocator> data_;
+    std::unordered_map<metric_path, std::unique_ptr<basic_registered_metric>, std::hash<metric_path>, std::equal_to<metric_path>, TAlloc> metrics_;
+    std::unordered_map<std::string, std::unique_ptr<basic_publish_options>, std::hash<std::string>, std::equal_to<std::string>, TAlloc> data_;
 
     mutable std::mutex metriclock_;
     mutable std::mutex datalock_;
