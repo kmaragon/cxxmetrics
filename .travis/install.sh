@@ -22,4 +22,5 @@ fi
 pip install conan --upgrade
 pip install conan_package_tools
 
+conan remote add manu343726 https://api.bintray.com/conan/manu343726/conan-packages 
 conan user
