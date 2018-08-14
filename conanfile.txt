@@ -1,2 +1,0 @@
-[requires]
-ctti/0.0.1@manu343726/testing

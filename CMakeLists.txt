@@ -17,7 +17,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Coverage")
 endif()
 
 include(Conan)
-conan_include("conanfile.txt")
+conan_include("conanfile.py")
 
 add_subdirectory(cxxmetrics)
 add_subdirectory(cxxmetrics_prometheus)

@@ -1,6 +1,16 @@
-include(Conan)
-include(Coverage)
-conan_include("conanfile.txt")
+project("cxxmetrics_test" CXX)
+
+if (NOT CONAN_EXPORTED)
+    include(Conan)
+    include(Coverage)
+    conan_include("conanfile.py")
+
+    add_library(CONAN_PKG::cxxmetrics INTERFACE IMPORTED)
+    target_link_libraries(CONAN_PKG::cxxmetrics INTERFACE cxxmetrics cxxmetrics_prometheus)
+else()
+    include("${CMAKE_BINARY_DIR}/conanbuildinfo.cmake")
+    conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
+endif()
 
 set(CMAKE_CXX_STANDARD 14)
 
@@ -27,10 +37,16 @@ set(PROMETHEUS_SOURCES
 )
 
 add_executable(cxxmetrics_test ${SOURCES})
-target_link_libraries(cxxmetrics_test CONAN_PKG::catch2 cxxmetrics -pthread)
+target_link_libraries(cxxmetrics_test CONAN_PKG::catch2 CONAN_PKG::cxxmetrics -pthread)
 
 add_executable(cxxmetrics_prometheus_test ${PROMETHEUS_SOURCES})
-target_link_libraries(cxxmetrics_prometheus_test CONAN_PKG::catch2 cxxmetrics cxxmetrics_prometheus)
+target_link_libraries(cxxmetrics_prometheus_test CONAN_PKG::catch2 CONAN_PKG::cxxmetrics)
 
-add_coverage_run(cxxmetrics_coverage cxxmetrics_test)
-add_coverage_run(cxxmetrics_prometheus_coverage cxxmetrics_prometheus_test)
+if (NOT CONAN_EXPORTED)
+    add_coverage_run(cxxmetrics_coverage cxxmetrics_test)
+    add_coverage_run(cxxmetrics_prometheus_coverage cxxmetrics_prometheus_test)
+endif()
+
+enable_testing()
+add_test(NAME cxxmetrics
+        COMMAND cxxmetrics_test)
