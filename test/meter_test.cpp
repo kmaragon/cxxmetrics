@@ -29,8 +29,8 @@ TEST_CASE("Meter copy assignment works", "[meter]")
 TEST_CASE("Meter initializes correctly", "[meter]")
 {
     meter<5_msec, 1_min, 1_sec> m;
-    REQUIRE(m.template rate<1_min>().rate == 0);
-    REQUIRE(m.template rate<1_sec>().rate == 0);
+    REQUIRE(m.rate<1_min>().rate == 0);
+    REQUIRE(m.rate<1_sec>().rate == 0);
     REQUIRE(m.mean() == 0);
 
     auto ss = m.snapshot();
@@ -50,20 +50,20 @@ TEST_CASE("Meter rates are passed on", "[meter]")
         clock++;
     }
 
-    REQUIRE(round(m.template get_rate<1>()) == 10);
-    REQUIRE(round(m.template get_rate<8>()) == 10);
-    REQUIRE(round(m.template get_rate<20>()) == 10);
-    REQUIRE(round(m.template get_rate<50>()) == 10);
-    REQUIRE(round(m.template mean()) == 10);
+    REQUIRE(round(m.get_rate<1>()) == 10);
+    REQUIRE(round(m.get_rate<8>()) == 10);
+    REQUIRE(round(m.get_rate<20>()) == 10);
+    REQUIRE(round(m.get_rate<50>()) == 10);
+    REQUIRE(round(m.mean()) == 10);
 
     clock += 100;
     m.mark(1000);
 
     clock += 1;
 
-    REQUIRE(m.template get_rate<1>()> m.get_rate<8>());
-    REQUIRE(m.template get_rate<8>()> m.get_rate<20>());
-    REQUIRE(m.template get_rate<20>()> m.get_rate<50>());
+    REQUIRE(m.get_rate<1>()> m.get_rate<8>());
+    REQUIRE(m.get_rate<8>()> m.get_rate<20>());
+    REQUIRE(m.get_rate<20>()> m.get_rate<50>());
     REQUIRE_THAT(m.mean(), Catch::WithinULP(1100.0 / 111.0, 1));
 }
 

@@ -211,13 +211,15 @@ public:
         return rates_.template get_rate<TPeriod>().rate();
     }
 
-    constexpr void each(const auto &fn)
+    template<typename _T>
+    constexpr void each(const _T &fn)
     {
         each_fn<TWindows...> efn;
         efn.doeach(*this, fn);
     }
 
-    constexpr void each(const auto &fn) const
+    template<typename _T>
+    constexpr void each(const _T &fn) const
     {
         each_fn<TWindows...> efn;
         efn.doeach(*this, fn);

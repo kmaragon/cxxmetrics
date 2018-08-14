@@ -218,8 +218,8 @@ public:
     explicit gauge(const TGaugeType& value = TGaugeType()) noexcept :
             gauges::primitive_gauge<TGaugeType>(value)
     { }
-    gauge(const gauge& copy) noexcept = default;
-    gauge(gauge&& mv) noexcept = default;
+    gauge(const gauge& copy) = default;
+    gauge(gauge&& mv) = default;
 
     ~gauge() = default;
 
@@ -236,18 +236,18 @@ template<typename T, gauges::gauge_aggregation_type TAggregation>
 class gauge<std::function<T()>, TAggregation> : public gauges::functional_gauge<std::function<T()>>, public metric<gauge<std::function<T()>>>
 {
 public:
-    explicit gauge(const std::function<T()> &fn) noexcept :
+    explicit gauge(const std::function<T()> &fn) :
             gauges::functional_gauge<std::function<T()>>(fn)
     { }
     explicit gauge(std::function<T()> &&fn) noexcept :
             gauges::functional_gauge<std::function<T()>>(std::forward(fn))
     { }
-    gauge(const gauge& copy) noexcept = default;
-    gauge(gauge&& mv) noexcept = default;
+    gauge(const gauge& copy) = default;
+    gauge(gauge&& mv) = default;
     ~gauge() = default;
 
-    gauge& operator=(const gauge& other) noexcept = default;
-    gauge& operator=(gauge&& mv) noexcept = default;
+    gauge& operator=(const gauge& other) = default;
+    gauge& operator=(gauge&& mv) = default;
 };
 
 template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
@@ -257,10 +257,10 @@ public:
     inline explicit gauge(TGaugeType* ptr) noexcept :
             gauges::referential_gauge<TGaugeType>(*ptr)
     { }
-    gauge(const gauge& copy) noexcept = default;
+    gauge(const gauge& copy) = default;
     ~gauge() = default;
 
-    gauge& operator=(const gauge& other) noexcept = default;
+    gauge& operator=(const gauge& other) = default;
 };
 
 template<typename TGaugeType, gauges::gauge_aggregation_type TAggregation>
@@ -270,10 +270,10 @@ public:
     inline explicit gauge(TGaugeType& ref) noexcept :
             gauges::referential_gauge<TGaugeType>(ref)
     { }
-    gauge(const gauge& copy) noexcept = default;
+    gauge(const gauge& copy) = default;
     ~gauge() = default;
 
-    gauge& operator=(const gauge& other) noexcept = default;
+    gauge& operator=(const gauge& other) = default;
 };
 
 namespace internal
