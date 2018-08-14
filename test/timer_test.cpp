@@ -47,7 +47,7 @@ TEST_CASE("Timer Tests", "[timer]")
             REQUIRE(rate_pair.second > metric_value(0));
         }
 
-        REQUIRE(std::abs(static_cast<double>(ss.rate().value()) - 1.0) < 0.1);
+        REQUIRE(std::abs(static_cast<double>(ss.rate().value()) - 1.0) < 0.5);
     }
 
     SECTION("Scope Transfer works")
