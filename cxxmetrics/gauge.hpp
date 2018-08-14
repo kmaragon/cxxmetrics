@@ -228,8 +228,8 @@ public:
         gauges::primitive_gauge<TGaugeType>::operator=(value);
         return *this;
     }
-    gauge& operator=(const gauge& other) noexcept = default;
-    gauge& operator=(gauge&& mv) noexcept = default;
+    gauge& operator=(const gauge& other) = default;
+    gauge& operator=(gauge&& mv) = default;
 };
 
 template<typename T, gauges::gauge_aggregation_type TAggregation>
