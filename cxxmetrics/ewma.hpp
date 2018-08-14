@@ -212,7 +212,7 @@ TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) 
     auto rate = nrate + (alpha_ * (pending - nrate));
 
     // figure out how many intervals we've missed
-    missed_intervals = ((at - last) / period(TInterval)) - 1;
+    missed_intervals = (period(at - last).to_value() / period(TInterval).to_value()) - 1;
     if (missed_intervals)
     {
         // we missed some intervals - we'll average in zeros

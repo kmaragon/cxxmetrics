@@ -37,8 +37,8 @@ TEST_CASE("Timer Tests", "[timer]")
     {
         for (int i = 0; i < 100; i++)
         {
-            auto localt = scoped_timer(t);
             std::this_thread::sleep_for(std::chrono::microseconds(100));
+            auto localt = scoped_timer(t);
         }
 
         auto ss = t.snapshot();
@@ -47,7 +47,7 @@ TEST_CASE("Timer Tests", "[timer]")
             REQUIRE(rate_pair.second > metric_value(0));
         }
 
-        REQUIRE(std::abs(static_cast<double>(ss.rate().value()) - 1.0) < 0.1);
+        REQUIRE(std::abs(static_cast<double>(ss.rate().value()) - 1.0) < 0.5);
     }
 
     SECTION("Scope Transfer works")
