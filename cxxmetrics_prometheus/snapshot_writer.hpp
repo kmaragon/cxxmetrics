@@ -81,7 +81,7 @@ inline std::ostream& format_tags(std::ostream& into, const cxxmetrics::tag_colle
 }
 
 template<typename TRep, typename TPer>
-inline std::ostream& format_window(std::ostream& into, const std::chrono::duration<TRep, TPer>& time)
+std::ostream& format_window(std::ostream& into, const std::chrono::duration<TRep, TPer>& time)
 {
     using namespace std::chrono_literals;
     if (time >= 1h)
@@ -122,13 +122,13 @@ struct prometheus_time_window_t
 };
 
 template<typename TRep, typename TPer>
-inline prometheus_time_window_t<TRep, TPer> window(const std::chrono::duration<TRep, TPer>& d)
+prometheus_time_window_t<TRep, TPer> window(const std::chrono::duration<TRep, TPer>& d)
 {
     return prometheus_time_window_t<TRep, TPer>(d);
 }
 
 template<typename TRep, typename TPer>
-inline std::ostream& operator<<(std::ostream& stream, prometheus_time_window_t<TRep, TPer> w)
+std::ostream& operator<<(std::ostream& stream, prometheus_time_window_t<TRep, TPer> w)
 {
     return format_window(stream, w.duration);
 }
@@ -155,7 +155,7 @@ struct prometheus_name_t
     prometheus_name_t(const cxxmetrics::metric_path& n) : name(n) { }
 };
 
-prometheus_name_t name(const cxxmetrics::metric_path& path)
+inline prometheus_name_t name(const cxxmetrics::metric_path& path)
 {
     return prometheus_name_t(path);
 }
