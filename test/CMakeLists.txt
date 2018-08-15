@@ -8,7 +8,7 @@ if (NOT CONAN_EXPORTED)
     add_library(CONAN_PKG::cxxmetrics INTERFACE IMPORTED)
     target_link_libraries(CONAN_PKG::cxxmetrics INTERFACE cxxmetrics cxxmetrics_prometheus)
 else()
-    include("${CMAKE_BINARY_DIR}/conanbuildinfo.cmake")
+    include("${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake")
     conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
 endif()
 
