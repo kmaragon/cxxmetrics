@@ -6,7 +6,7 @@ env:
      - CONAN_LOGIN_USERNAME: "kmaragon"
      - CONAN_CHANNEL: "stable"
      - CONAN_UPLOAD: "https://api.bintray.com/conan/kmaragon/conan"
-     - CONAN_REMOTES: "https://api.bintray.com/conan/manu343726/conan-packages, https://api.bintray.com/conan/bincrafters/public-conan"
+     - CONAN_REMOTES: "https://conan.bintray.com, https://api.bintray.com/conan/manu343726/conan-packages, https://api.bintray.com/conan/bincrafters/public-conan"
 
 linux: &linux
    os: linux
