@@ -8,7 +8,7 @@ if (NOT CONAN_EXPORTED)
     add_library(CONAN_PKG::cxxmetrics INTERFACE IMPORTED)
     target_link_libraries(CONAN_PKG::cxxmetrics INTERFACE cxxmetrics cxxmetrics_prometheus)
 else()
-    include("${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake")
+    include("${CMAKE_BINARY_DIR}/conanbuildinfo.cmake")
     conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
 endif()
 
@@ -37,9 +37,11 @@ set(PROMETHEUS_SOURCES
 )
 
 add_executable(cxxmetrics_test ${SOURCES})
+target_include_directories(cxxmetrics_test PUBLIC ${CONAN_INCLUDES})
 target_link_libraries(cxxmetrics_test CONAN_PKG::catch2 CONAN_PKG::cxxmetrics -pthread)
 
 add_executable(cxxmetrics_prometheus_test ${PROMETHEUS_SOURCES})
+target_include_directories(cxxmetrics_prometheus_test PUBLIC ${CONAN_INCLUDES})
 target_link_libraries(cxxmetrics_prometheus_test CONAN_PKG::catch2 CONAN_PKG::cxxmetrics)
 
 if (NOT CONAN_EXPORTED)
