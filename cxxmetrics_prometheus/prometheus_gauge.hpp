@@ -11,7 +11,7 @@ class snapshot_writer<cxxmetrics::average_value_snapshot>
 {
     void write_header() const
     {
-        stream << "# TYPE " << internal::name(path) << " gauge\r\n";
+        stream << "# TYPE " << internal::name(path) << " gauge\n";
     }
 
     CXXMETRICS_PROMETHEUS_SNAPSHOT_WRITER_INIT
@@ -20,7 +20,7 @@ public:
     void write(const cxxmetrics::tag_collection& tags, const cxxmetrics::average_value_snapshot& snapshot)
     {
         // metric_name
-        stream << internal::name(path) << '{' << internal::tags(tags) << "} " << internal::scale_value(snapshot.value(), options.value_options()) << "\r\n";
+        stream << internal::name(path) << '{' << internal::tags(tags) << "} " << internal::scale_value(snapshot.value(), options.value_options()) << "\n";
     }
 };
 

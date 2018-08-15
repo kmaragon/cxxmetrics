@@ -72,7 +72,7 @@ inline std::ostream& format_tags(std::ostream& into, const cxxmetrics::tag_colle
     format_tag_value(into, tag->second) << "\"";
     for (++tag; tag != tags.end(); ++tag)
     {
-        into << ", ";
+        into << ",";
         format_name(into, tag->first) << "=\"";
         format_tag_value(into, tag->second) << "\"";
     }

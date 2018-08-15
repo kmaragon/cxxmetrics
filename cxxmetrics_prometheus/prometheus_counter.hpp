@@ -12,7 +12,7 @@ class snapshot_writer<cxxmetrics::cumulative_value_snapshot>
     void write_header() const
     {
         // use untyped instead of counters since counters can be negative per https://prometheus.io/docs/instrumenting/writing_exporters/
-        stream << "# TYPE " << internal::name(path) << " untyped\r\n";
+        stream << "# TYPE " << internal::name(path) << " untyped\n";
     }
 
     CXXMETRICS_PROMETHEUS_SNAPSHOT_WRITER_INIT
@@ -21,7 +21,7 @@ public:
     void write(const cxxmetrics::tag_collection& tags, const cxxmetrics::cumulative_value_snapshot& snapshot)
     {
         // metric_name
-        stream << internal::name(path) << '{' << internal::tags(tags) << "} " << internal::scale_value(snapshot.value(), options.value_options()) << "\r\n";
+        stream << internal::name(path) << '{' << internal::tags(tags) << "} " << internal::scale_value(snapshot.value(), options.value_options()) << "\n";
     }
 };
 

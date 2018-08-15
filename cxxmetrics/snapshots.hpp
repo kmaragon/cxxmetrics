@@ -296,12 +296,13 @@ public:
      */
     metric_value mean() const noexcept
     {
-        metric_value total(0.0l);
         if (values_.empty())
-            return total;
+            return metric_value(0);
+
+        metric_value total = values_[0];
 
         // should we worry about overflow here?
-        for (std::size_t i = 0; i < values_.size(); i++)
+        for (std::size_t i = 1; i < values_.size(); i++)
         {
             auto vs = i + 1.0l;
             long double eratio = i / vs;

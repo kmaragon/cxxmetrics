@@ -90,11 +90,10 @@ inline std::string metric_path::join(const std::string &delim) const
 
     result.reserve(len + 1);
     result += paths_[0];
-    result += delim;
     for (std::size_t i = 1; i < paths_.size(); ++i)
     {
-        result += paths_[i];
         result += delim;
+        result += paths_[i];
     }
 
     return result;

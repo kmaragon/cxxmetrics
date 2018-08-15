@@ -230,6 +230,9 @@ TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) 
             rate = rate + (alpha_ * -rate);
     }
 
+    if (std::isnan(rate) || std::isinf(rate))
+        rate = TValue{};
+
     // make sure that last_ didn't catch up with us
     if (!TWrite || (at - last) < period(TInterval))
         return rate;
