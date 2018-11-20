@@ -1,5 +1,5 @@
 #ifndef CXXMETRICS_SIMPLE_RESERVOIR_HPP
-#define CXXMETRICS_XIMPLE_RESERVOIR_HPP
+#define CXXMETRICS_SIMPLE_RESERVOIR_HPP
 
 #include "ringbuf.hpp"
 #include "snapshots.hpp"

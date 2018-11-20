@@ -185,12 +185,15 @@ ringbuf<TElemType, TSize>::iterator::iterator(const ringbuf *rb, int64_t offset)
         }
 
         current_ = rb->data_[at];
-        if (rb->head_.load(std::memory_order_release) == head)
+        auto nhead = rb->head_.load(std::memory_order_release);
+        if (nhead == head)
         {
             offset_ = at;
             headat_ = head;
             break;
         }
+
+        head = nhead;
     }
 
 }
