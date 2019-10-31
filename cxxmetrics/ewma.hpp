@@ -213,7 +213,7 @@ TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) 
 
     // figure out how many intervals we've missed
     missed_intervals = ((at - last) / period(TInterval)) - 1;
-    if (missed_intervals)
+    if (missed_intervals > 0)
     {
         // we missed some intervals - we'll average in zeros
         if ((at - last) > period(TWindow) && TWindow > TInterval)
@@ -226,6 +226,8 @@ TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) 
             missed_intervals -= (missed_windows * intervals_per_window);
         }
 
+        // this is the fastest way to do this - the alternative is a standard repeated integral
+        // but this is faster
         for (int i = 0; i < missed_intervals; i++)
             rate = rate + (alpha_ * -rate);
     }

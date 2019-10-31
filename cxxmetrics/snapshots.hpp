@@ -332,6 +332,16 @@ public:
     {
         return values_.empty() ? metric_value(std::numeric_limits<int64_t>::max()) : values_[values_.size()-1];
     }
+
+    /**
+     * Get the number of elements in the data inside the snapshot
+     *
+     * \return the number of elements in teh snapshot
+     */
+    std::size_t size() const
+    {
+        return values_.size();
+    }
 };
 
 template<typename TInputIterator>

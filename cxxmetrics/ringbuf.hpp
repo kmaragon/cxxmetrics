@@ -39,7 +39,7 @@ public:
     class iterator : public std::iterator<std::input_iterator_tag, TElemType>
     {
         int64_t offset_;
-        int64_t headat_;
+        std::size_t size_;
         TElemType current_;
         const ringbuf *buf_;
     public:
@@ -162,7 +162,6 @@ private:
 template<typename TElemType, size_t TSize>
 ringbuf<TElemType, TSize>::iterator::iterator() noexcept :
         offset_(-1),
-        headat_(0),
         buf_(nullptr)
 {
 };
@@ -170,18 +169,22 @@ ringbuf<TElemType, TSize>::iterator::iterator() noexcept :
 template<typename TElemType, size_t TSize>
 ringbuf<TElemType, TSize>::iterator::iterator(const ringbuf *rb, int64_t offset) noexcept :
         offset_(-1),
-        headat_(0),
+        size_(rb->size()),
         buf_(rb)
 {
-    int64_t head = rb->head_.load();
+    int64_t head = rb->head_.load(std::memory_order_acquire);
     while (true)
     {
+        int64_t ready = rb->ready_.load(std::memory_order_acquire);
         int64_t tail = rb->tail_.load(std::memory_order_acquire);
         int64_t at = head + offset;
+
         if (head == tail)
         {
-            // The container is empty... just bail
-            break;
+            // The container is empty ... just bail
+            if (ready < 0 || ready == tail)
+                break;
+            continue;
         }
 
         current_ = rb->data_[at];
@@ -189,7 +192,7 @@ ringbuf<TElemType, TSize>::iterator::iterator(const ringbuf *rb, int64_t offset)
         if (nhead == head)
         {
             offset_ = at;
-            headat_ = head;
+            size_--;
             break;
         }
 
@@ -225,54 +228,27 @@ typename ringbuf<TElemType, TSize>::iterator &ringbuf<TElemType, TSize>::iterato
     if (offset_ < 0)
         return *this;
 
-    while (true)
+    if (size_ == 0)
     {
-        int64_t head = buf_->head_.load();
-
-        int64_t ready = buf_->ready_.load();
-        int64_t tail = buf_->tail_.load();
-        int64_t offset = offset_;
-
-        // first check to see if the head surpassed our current offset
-        if ((head > headat_) && buf_->is_within(offset, headat_, head - 1))
-        {
-            // yep - our offset went past the head
-            // so we'll jump the offset and keep going with our logic
-            offset = head;
-            current_ = buf_->data_[head];
-
-        }
-        else
-        {
-            offset = (offset + 1) % buf_->limit_;
-            current_ = buf_->data_[offset];
-        }
-
-        // are we at the end?
-        if (offset == tail)
-        {
-            offset_ = -1;
-            return *this;
-        }
-
-        // first check and see if we are on a cell that is not yet ready
-        if (buf_->is_within(offset, ready + 1, tail))
-        {
-            // we're in that awkward spot. We need to try again
-            std::this_thread::yield();
-            continue;
-        }
-
-        // ok - just make sure the head didn't jump since we started all this
-        if (buf_->head_.load() != head)
-        {
-            // the head moved - we might have a problem
-            continue;
-        }
-
-        offset_ = offset;
+        offset_ = -1;
         return *this;
     }
+
+    offset_ = (offset_ + 1) % buf_->limit_;
+    while (true)
+    {
+        if (buf_->is_within(offset_, buf_->ready_ + 1, buf_->tail_))
+        {
+            offset_ = (buf_->tail_.load() + 1) % buf_->limit_;
+            continue;
+        }
+
+        current_ = buf_->data_[offset_];
+        break;
+    }
+    size_--;
+
+    return *this;
 }
 
 template<typename TElemType, size_t TSize>
@@ -343,8 +319,8 @@ bool ringbuf<TElemType, TSize>::shift_if(const TPredicate &fn) noexcept
     while (true)
     {
         int64_t ready = ready_.load();
-        int64_t tail = tail_.load();
         int64_t head = start;
+        int64_t tail = tail_.load();
 
         // head is between ready and tail
         // we need to move it to the other side
@@ -388,11 +364,10 @@ bool ringbuf<TElemType, TSize>::shift_if(const TPredicate &fn) noexcept
 template<typename TElemType, size_t TSize>
 void ringbuf<TElemType, TSize>::push(const TElemType &elem) noexcept
 {
+    int64_t tail = tail_.fetch_add(1);
     while (true)
     {
-        int64_t tail = tail_.fetch_add(1);
         auto neededready = tail - 1;
-
         if (tail >= limit_)
         {
             // we fell over the end so we don't need to worry about the data being written here
@@ -447,13 +422,24 @@ void ringbuf<TElemType, TSize>::push(const TElemType &elem) noexcept
 template<typename TElemType, size_t TSize>
 size_t ringbuf<TElemType, TSize>::size() const noexcept
 {
-    int64_t head = head_.load();
-    int64_t ready = ready_.load() + 1; // ready is the last item available - not the length
+    // we need a moment where we have a consistent head and tail
+    int64_t tail = tail_.load(); // ready is the last item available - not the length
+    std::int64_t head = 0;
+    while (true)
+    {
+        head = head_.load(std::memory_order_acquire);
+        auto tailnow = tail_.load(std::memory_order_release);
 
-    if (head > ready)
-        return (limit_ - head) + ready;
+        if (tailnow == tail)
+            break;
 
-    return ready - head;
+        tail = tailnow;
+    }
+
+    if (head > tail)
+        return (limit_ - head) + tail;
+
+    return tail - head;
 };
 
 }

@@ -548,7 +548,7 @@ class variant_data_holder
         variant_data_holder result(as<variant_data>());
         result.as<variant_data>()->add(*other.as<variant_data>());
 
-        return std::move(result);
+        return result;
     }
 
     variant_data_holder uc_mult(const variant_data_holder& other) const
@@ -556,7 +556,7 @@ class variant_data_holder
         variant_data_holder result(as<variant_data>());
         result.as<variant_data>()->multiply(*other.as<variant_data>());
 
-        return std::move(result);
+        return result;
     }
 
     variant_data_holder uc_div(const variant_data_holder& other) const
@@ -564,7 +564,7 @@ class variant_data_holder
         variant_data_holder result(as<variant_data>());
         result.as<variant_data>()->divide(*other.as<variant_data>());
 
-        return std::move(result);
+        return result;
     }
 
     template<typename T, typename>
@@ -627,7 +627,7 @@ public:
         variant_data_holder result(as<variant_data>());
         result.as<variant_data>()->negate();
 
-        return std::move(result);
+        return result;
     }
 
     variant_data_holder bitwise_negate() const
@@ -635,7 +635,7 @@ public:
         variant_data_holder result(as<variant_data>());
         result.as<variant_data>()->bitwise_negate();
 
-        return std::move(result);
+        return result;
     }
 
     ~variant_data_holder()

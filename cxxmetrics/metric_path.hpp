@@ -130,9 +130,14 @@ inline metric_path operator/(const char (&pstr)[Size], const metric_path& other)
     return metric_path(std::move(paths));
 }
 
-inline metric_path operator""_m(const char* metric, std::size_t len)
+}
+
+namespace cxxmetrics_literals
 {
-    return metric_path(metric, len);
+
+inline cxxmetrics::metric_path operator""_m(const char* metric, std::size_t len)
+{
+    return cxxmetrics::metric_path(metric, len);
 }
 
 }

@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 #include <cxxmetrics/simple_reservoir.hpp>
 #include <cxxmetrics/uniform_reservoir.hpp>
 #include <cxxmetrics/sliding_window.hpp>
@@ -72,6 +72,40 @@ TEST_CASE("Simple Reservoir overflow", "[reservoir]")
     REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
 
     simple_reservoir<double, 5> q = r;
+}
+
+
+TEST_CASE("Simple Reservoir threaded updates with snapshots", "[reservoir]")
+{
+    simple_reservoir<double, 50> r;
+    bool go = true;
+
+    auto worker = [&r, &go]() {
+        std::default_random_engine eng;
+        std::uniform_real_distribution<double> dist(0, 100000);
+
+        while (go)
+            r.update(dist(eng));
+    };
+
+    std::vector<std::thread> threads;
+    threads.emplace_back(worker);
+
+    // make sure the reservoir is full
+    for (int i = 0; i < 50; i++)
+        r.update(50);
+
+    std::size_t minsize = 40; // a reasonable ratio to account for threads competing
+    for (int i = 0; i < 1000; i++)
+    {
+        auto s = r.snapshot();
+        CAPTURE(i)
+        REQUIRE(s.size() >= minsize);
+    }
+
+    go = false;
+    for (auto& thr : threads)
+        thr.join();
 }
 
 TEST_CASE("Sliding Window Reservoir only gets window data", "[reservoir]")
