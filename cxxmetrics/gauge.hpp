@@ -284,7 +284,7 @@ struct default_metric_builder<cxxmetrics::gauge<std::function<T()>, TAggregation
 {
     cxxmetrics::gauge<std::function<T()>, TAggregation> operator()() const
     {
-        static std::function<T()> o = []() { return std::declval<T>(); };
+        static std::function<T()> o = []() { return T{}; };
         return cxxmetrics::gauge<std::function<T()>, TAggregation>(o);
     }
 };
