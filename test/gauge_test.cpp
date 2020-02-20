@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 #include <cxxmetrics/gauge.hpp>
 
 using namespace std;

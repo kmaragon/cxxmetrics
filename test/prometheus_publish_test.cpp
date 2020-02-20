@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 #include <sstream>
 #include <cxxmetrics_prometheus/prometheus_publisher.hpp>
 #include <cxxmetrics/simple_reservoir.hpp>
