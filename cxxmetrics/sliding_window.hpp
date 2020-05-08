@@ -143,29 +143,44 @@ public:
      */
     using window_type = typename internal::clock_traits<TClockGet>::clock_diff;
     using value_type = TElem;
+
 private:
-
-    class transform_iterator : public std::iterator<TElem, std::input_iterator_tag>
+    class transform_and_filter_iterator : public std::iterator<TElem, std::input_iterator_tag>
     {
+        using clock_point = typename internal::clock_traits<TClockGet>::clock_point;
+
+        clock_point min_;
         typename internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator it_;
+        typename internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator end_;
     public:
-        transform_iterator() = default;
+        transform_and_filter_iterator() : min_{} { }
 
-        transform_iterator(
-                const typename internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator &real) noexcept
-                : it_(real) {}
+        transform_and_filter_iterator(
+                const clock_point& min,
+                const typename internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator &real,
+                const typename internal::ringbuf<internal::timed_data<TElem, TClockGet>, TMaxSize>::iterator &end) noexcept :
+                min_(min),
+                it_(real),
+                end_(end)
+        {
+            while (it_ != end_ && it_->time() < min_)
+                ++it_;
+        }
 
-        transform_iterator(const transform_iterator &other) = default;
+        bool operator==(const transform_and_filter_iterator &other) const noexcept { return it_ == other.it_; }
 
-        ~transform_iterator() = default;
+        bool operator!=(const transform_and_filter_iterator &other) const noexcept { return it_ != other.it_; }
 
-        transform_iterator &operator=(const transform_iterator &other) = default;
+        transform_and_filter_iterator &operator++() noexcept
+        {
+            if (it_ == end_)
+                return *this;
 
-        bool operator==(const transform_iterator &other) const noexcept { return it_ == other.it_; }
-
-        bool operator!=(const transform_iterator &other) const noexcept { return it_ != other.it_; }
-
-        transform_iterator &operator++() noexcept { ++it_; return *this; }
+            ++it_;
+            while (it_ != end_ && it_->time() < min_)
+                ++it_;
+            return *this;
+        }
 
         TElem operator*() const noexcept { return it_->value(); }
     };
@@ -238,18 +253,6 @@ template<typename TElem, size_t TMaxSize, typename TClockGet>
 void sliding_window_reservoir<TElem, TMaxSize, TClockGet>::update(const TElem &v) noexcept
 {
     // set up our values for trimming old stuff out
-    auto now = clock_();
-    auto min = now - window_;
-
-    auto cond = [&min](const auto &timedval) {
-        if (timedval.time() < min)
-            return true;
-        return false;
-    };
-
-    // trim our older values
-    while (data_.shift_if(cond));
-
     data_.push(internal::timed_data<TElem, TClockGet>(v, clock_));
 }
 
@@ -259,14 +262,13 @@ reservoir_snapshot sliding_window_reservoir<TElem, TMaxSize, TClockGet>::snapsho
     auto now = clock_();
     auto min = now - window_;
 
-    auto begin = data_.begin();
-    for (; begin != data_.end(); ++begin)
-    {
-        if (begin->time() >= min)
-            break;
-    }
+    auto start = data_.begin();
+    auto end = data_.end();
 
-    return reservoir_snapshot(transform_iterator(begin), transform_iterator(data_.end()), TMaxSize);
+    return reservoir_snapshot(
+            transform_and_filter_iterator(min, start, end),
+            transform_and_filter_iterator(min, end, end),
+            TMaxSize);
 }
 
 }

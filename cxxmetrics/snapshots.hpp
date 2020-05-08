@@ -350,7 +350,7 @@ reservoir_snapshot::reservoir_snapshot(TInputIterator begin, const TInputIterato
     values_.reserve(size);
 
     std::size_t at = 0;
-    for (; begin != end && at++ < size; ++begin)
+    for (; begin != end && at < size; ++begin, ++at)
         values_.emplace_back(*begin);
 
     std::sort(values_.begin(), values_.end());
