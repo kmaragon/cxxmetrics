@@ -225,7 +225,7 @@ typename ringbuf<TElemType, TSize>::iterator ringbuf<TElemType, TSize>::begin() 
     if (size < TSize)
         return iterator(this, 0);
 
-    return iterator(this, (tail_.load() + 1) % TSize);
+    return iterator(this, tail_.load() % TSize);
 }
 
 template<typename TElemType, size_t TSize>
@@ -237,7 +237,7 @@ typename ringbuf<TElemType, TSize>::iterator ringbuf<TElemType, TSize>::end() co
 template<typename TElemType, size_t TSize>
 void ringbuf<TElemType, TSize>::push(const TElemType &elem) noexcept
 {
-    auto writeloc = tail_.fetch_add(1) + 1;
+    auto writeloc = tail_.fetch_add(1);
     data_[writeloc % TSize] = elem;
 
     if (++writeloc > TSize)
