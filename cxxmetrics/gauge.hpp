@@ -125,7 +125,7 @@ public:
     gauge_type get() noexcept override;
     gauge_type get() const noexcept override;
 
-    value_snapshot snapshot() const noexcept { return this->make_snapshot(); }
+    auto snapshot() const noexcept { return this->make_snapshot(); }
 };
 
 template<typename TFn, gauge_aggregation_type TAggregation>
@@ -240,7 +240,7 @@ public:
             gauges::functional_gauge<std::function<T()>>(fn)
     { }
     explicit gauge(std::function<T()> &&fn) noexcept :
-            gauges::functional_gauge<std::function<T()>>(std::forward(fn))
+            gauges::functional_gauge<std::function<T()>>(std::move(fn))
     { }
     gauge(const gauge& copy) = default;
     gauge(gauge&& mv) = default;
