@@ -31,25 +31,3 @@ TEST_CASE("Ringbuf can push full circle", "[ringbuf]")
     REQUIRE_THAT(values[1], Catch::WithinULP(120000.0001, 1));
     REQUIRE_THAT(values[0], Catch::WithinULP(8.9, 1));
 }
-
-TEST_CASE("Ringbuf can shift the whole array", "[ringbuf]")
-{
-    ringbuf<double, 5> subject;
-
-    subject.push(12);
-    subject.push(15.33);
-    subject.push(18.21);
-    subject.push(19.001);
-    subject.push(8.9);
-
-    REQUIRE(subject.size() == 5);
-    REQUIRE_THAT(subject.shift(), Catch::WithinULP(12.0, 1));
-    REQUIRE_THAT(subject.shift(), Catch::WithinULP(15.33, 1));
-    REQUIRE_THAT(subject.shift(), Catch::WithinULP(18.21, 1));
-
-    REQUIRE(subject.size() == 2);
-    REQUIRE_THAT(subject.shift(), Catch::WithinULP(19.001, 1));
-    REQUIRE_THAT(subject.shift(), Catch::WithinULP(8.9, 1));
-
-    REQUIRE_THAT(subject.size(), Catch::WithinULP(0.0, 1));
-}
