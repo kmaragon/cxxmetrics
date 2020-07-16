@@ -5,18 +5,16 @@ environment:
     PYTHON_VERSION: "2.7.8"
     PYTHON_ARCH: "32"
 
-    CONAN_REFERENCE: "cxxmetrics/0.0.1"
+    CONAN_REFERENCE: "cxxmetrics/0.0.7"
     CONAN_USERNAME: "kmaragon"
     CONAN_LOGIN_USERNAME: "kmaragon"
     CONAN_CHANNEL: "stable"
     
     matrix:
-        - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-          CONAN_VISUAL_VERSIONS: 12
-        - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-          CONAN_VISUAL_VERSIONS: 14
-        - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-          CONAN_VISUAL_VERSIONS: 15
+      - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+        CONAN_VISUAL_VERSIONS: 15
+      - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+        CONAN_VISUAL_VERSIONS: 16
 
 
 install:
