@@ -190,12 +190,12 @@ class quantile_options : public quantiles::quantile_options_builder<typename tem
  */
 class histogram_publish_options : public virtual value_publish_options
 {
-    static basic_quantile_options& default_quantiles()
+    static std::shared_ptr<basic_quantile_options> default_quantiles()
     {
-        static auto def = std::make_unique<quantile_options<quantile(50.0l), quantile(90.0l), quantile(99.0l)>>();
-        return *def;
+        static auto def = std::make_shared<quantile_options<quantile(50.0l), quantile(90.0l), quantile(99.0l)>>();
+        return def;
     }
-    std::unique_ptr<basic_quantile_options> quantiles_;
+    std::shared_ptr<basic_quantile_options> quantiles_;
     bool count_;
 public:
     histogram_publish_options(histogram_publish_options&& other) noexcept :
@@ -234,10 +234,11 @@ public:
      *
      * \return the quantile options for the publisher, will either be options specific or universal default
      */
-    basic_quantile_options& quantiles() const noexcept
+    std::shared_ptr<basic_quantile_options> quantiles() const noexcept
     {
-        if (quantiles_)
-            return *quantiles_;
+        auto quantiles = quantiles_;
+        if (quantiles)
+            return quantiles;
         return default_quantiles();
     }
 

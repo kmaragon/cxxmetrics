@@ -55,14 +55,17 @@ private:
 };
 
 template<typename T, typename TClockGet>
-timed_data<T, TClockGet>::timed_data() noexcept
+timed_data<T, TClockGet>::timed_data() noexcept :
+        time_{},
+        value_{}
 {
     // invalid state constructor
 }
 
 template<typename T, typename TClockGet>
 timed_data<T, TClockGet>::timed_data(const TClockGet &clock) noexcept :
-        time_(clock())
+        time_(clock()),
+        value_{}
 {
 }
 

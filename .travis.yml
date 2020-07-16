@@ -1,7 +1,7 @@
 
 env:
    global:
-     - CONAN_REFERENCE: "cxxmetrics/0.0.3"
+     - CONAN_REFERENCE: "cxxmetrics/0.0.7"
      - CONAN_USERNAME: "kmaragon"
      - CONAN_LOGIN_USERNAME: "kmaragon"
      - CONAN_CHANNEL: "stable"
@@ -30,10 +30,13 @@ matrix:
         env: CONAN_GCC_VERSIONS=7 CONAN_DOCKER_IMAGE=lasote/conangcc7
 
       - <<: *linux
-        env: CONAN_CLANG_VERSIONS=4.0 CONAN_DOCKER_IMAGE=lasote/conanclang40
+        env: CONAN_GCC_VERSIONS=8 CONAN_DOCKER_IMAGE=lasote/conangcc7
 
       - <<: *linux
         env: CONAN_CLANG_VERSIONS=5.0 CONAN_DOCKER_IMAGE=lasote/conanclang50
+
+      - <<: *linux
+        env: CONAN_CLANG_VERSIONS=5.0 CONAN_DOCKER_IMAGE=lasote/conanclang60
 
 #      - <<: *osx
 #        osx_image: xcode8.3

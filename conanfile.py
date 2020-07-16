@@ -5,7 +5,7 @@ from conans import ConanFile, tools
 
 class CxxmetricsConan(ConanFile):
     name = "cxxmetrics"
-    version = "0.0.6"
+    version = "0.0.7"
     license = "Apache 2.0"
     settings = "os"
     url = "https://github.com/kmaragon/cxxmetrics"

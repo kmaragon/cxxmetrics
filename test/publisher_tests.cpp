@@ -321,8 +321,8 @@ TEST_CASE("Publisher can get histogram options", "[publisher]")
             else
                 value = 0;
 
-            auto& qvisitors = opts.histogram_options().quantiles();
-            qvisitors.visit(ss, [&](quantile q, const metric_value& v)
+            auto qvisitors = opts.histogram_options().quantiles();
+            qvisitors->visit(ss, [&](quantile q, const metric_value& v)
             {
                 values.emplace(q, round(v));
             });
