@@ -1,6 +1,7 @@
 #ifndef CXXMETRICS_SNAPSHOT_WRITER_HPP
 #define CXXMETRICS_SNAPSHOT_WRITER_HPP
 
+#include <cctype>
 #include <ostream>
 #include <cxxmetrics/snapshots.hpp>
 #include <cxxmetrics/publisher.hpp>
