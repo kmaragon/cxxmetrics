@@ -9,6 +9,8 @@ environment:
     CONAN_USERNAME: "kmaragon"
     CONAN_LOGIN_USERNAME: "kmaragon"
     CONAN_CHANNEL: "stable"
+    CONAN_REMOTES: "https://conan.bintray.com@True@conan-center,https://api.bintray.com/conan/manu343726/conan-packages@True@manu343726,https://api.bintray.com/conan/bincrafters/public-conan@True@bincrafters"
+
     
     matrix:
       - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
