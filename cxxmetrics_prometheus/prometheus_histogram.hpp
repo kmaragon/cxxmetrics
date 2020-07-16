@@ -27,7 +27,7 @@ public:
             stream << internal::name(path) << "_count{" << internal::tags(tags) << "} " << internal::scale_value(snapshot.count(), options.histogram_options()) << "\n";
 
         stream << internal::name(path) << "_mean{" << internal::tags(tags) << "} " << internal::scale_value(snapshot.mean(), options.histogram_options()) << "\n";
-        options.histogram_options().quantiles().visit(snapshot, [&](cxxmetrics::quantile q, cxxmetrics::metric_value&& value) {
+        options.histogram_options().quantiles()->visit(snapshot, [&](cxxmetrics::quantile q, cxxmetrics::metric_value&& value) {
             stream << internal::name(path) << '{' << "quantile=\"" << (q.percentile() / 100.0) << "\"" << comma << internal::tags(tags) << "} " << internal::scale_value(std::move(value), options.histogram_options()) << "\n";
         });
     }

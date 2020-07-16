@@ -28,7 +28,7 @@ public:
             stream << internal::name(path) << "_count{" << internal::tags(tags) << "} " << internal::scale_value(snapshot.count(), options.timer_options()) << "\n";
 
         stream << internal::name(path) << "_mean{" << internal::tags(tags) << "} " << internal::scale_value(std::chrono::duration_cast<std::chrono::microseconds>(static_cast<std::chrono::nanoseconds>(snapshot.mean())), options.timer_options()) << "\n";
-        options.timer_options().quantiles().visit(snapshot, [&](cxxmetrics::quantile q, cxxmetrics::metric_value&& value) {
+        options.timer_options().quantiles()->visit(snapshot, [&](cxxmetrics::quantile q, cxxmetrics::metric_value&& value) {
             stream << internal::name(path) <<
                     '{' << "quantile=\"" << (q.percentile() / 100.0) << "\"" << comma <<
                     internal::tags(tags) << "} " <<
