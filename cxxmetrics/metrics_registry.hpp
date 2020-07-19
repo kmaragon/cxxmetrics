@@ -32,7 +32,23 @@ template<typename TVisitor>
 class invokable_snapshot_visitor_builder : public registered_snapshot_visitor_builder
 {
     TVisitor visitor_;
-    using visitor_type = decltype(std::bind(std::declval<TVisitor>(), std::declval<tag_collection&>(), std::placeholders::_1));
+
+    class bound_visitor
+    {
+        const TVisitor& visitor_;
+        const tag_collection& tags_;
+    public:
+        bound_visitor(const TVisitor& v, const tag_collection& t) :
+            visitor_(v),
+            tags_(t)
+        { }
+
+        template<typename T>
+        auto operator()(T&& arg) const
+        {
+            return visitor_(tags_, std::forward<T>(arg));
+        }
+    };
 public:
     invokable_snapshot_visitor_builder(TVisitor&& visitor) :
             visitor_(std::forward<TVisitor>(visitor))
@@ -40,13 +56,13 @@ public:
 
     std::size_t visitor_size() const override
     {
-        return sizeof(invokable_snapshot_visitor<visitor_type>);
+        return sizeof(invokable_snapshot_visitor<bound_visitor>);
     }
 
     void construct(snapshot_visitor* location, const tag_collection& collection) override
     {
         using namespace std::placeholders;
-        new (location) invokable_snapshot_visitor<visitor_type>(std::bind(visitor_, std::forward<const tag_collection&>(collection), _1));
+        new (location) invokable_snapshot_visitor<bound_visitor>(bound_visitor(visitor_, std::forward<const tag_collection&>(collection)));
     }
 };
 
