@@ -44,7 +44,8 @@ class invokable_snapshot_visitor_builder : public registered_snapshot_visitor_bu
         { }
 
         template<typename T>
-        auto operator()(T&& arg) const
+        decltype(std::declval<TVisitor>()(std::declval<const tag_collection>(), std::declval<T>()))
+        operator()(T&& arg) const
         {
             return visitor_(tags_, std::forward<T>(arg));
         }
@@ -62,7 +63,7 @@ public:
     void construct(snapshot_visitor* location, const tag_collection& collection) override
     {
         using namespace std::placeholders;
-        new (location) invokable_snapshot_visitor<bound_visitor>(bound_visitor(visitor_, std::forward<const tag_collection&>(collection)));
+        new (location) invokable_snapshot_visitor<bound_visitor>(bound_visitor(visitor_, collection));
     }
 };
 
