@@ -216,7 +216,7 @@ TValue ewma<TClockGet, TWindow, TInterval, TValue>::tick(const clock_point &at) 
     if (missed_intervals > 0)
     {
         // we missed some intervals - we'll average in zeros
-        if ((at - last) > period(TWindow) && TWindow > TInterval)
+        if ((TWindow > TInterval) && (at - last) > period(TWindow))
         {
             constexpr auto intervals_per_window = TWindow / TInterval;
             period::value missed_windows = missed_intervals / intervals_per_window;

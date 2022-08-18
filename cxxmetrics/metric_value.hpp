@@ -863,9 +863,9 @@ public:
     }
 
     template<typename TRep, typename TPer>
-    operator std::chrono::nanoseconds() const
+    operator std::chrono::duration<TRep, TPer>() const
     {
-        return value_.to_nanos();
+        return std::chrono::duration_cast<std::chrono::duration<TRep, TPer>>(value_.to_nanos());
     }
 };
 

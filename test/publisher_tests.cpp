@@ -326,6 +326,10 @@ TEST_CASE("Publisher can get histogram options", "[publisher]")
             {
                 values.emplace(q, round(v));
             });
+
+            ss.sample(9, [&](const metric_value& v, quantile q) {
+                values.emplace(q, round(v));
+            });
         });
     };
 
@@ -337,7 +341,7 @@ TEST_CASE("Publisher can get histogram options", "[publisher]")
 
     subject.visit_registry(visitor);
     REQUIRE(value == metric_value(50));
-    REQUIRE(values.size() == 3); // defaults
+    REQUIRE(values.size() == 12); // defaults
     REQUIRE(count == 2);
 
     print_percentiles(values);
@@ -348,6 +352,6 @@ TEST_CASE("Publisher can get histogram options", "[publisher]")
 
     print_percentiles(values);
     REQUIRE(value == metric_value(0));
-    REQUIRE(values.size() == 1);
+    REQUIRE(values.size() == 10);
     REQUIRE(count == 4);
 }

@@ -6,7 +6,7 @@ class CxxmetricsTestConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     generators = "cmake"
     exports = "CMakeLists.txt", "../test*"
-    build_requires = "catch2/2.3.0@bincrafters/stable"
+    build_requires = "catch2/2.13.9"
 
     def source(self):
         tools.replace_in_file("CMakeLists.txt", "project(\"cxxmetrics_test\" CXX)", '''project("cxxmetrics_test" CXX)

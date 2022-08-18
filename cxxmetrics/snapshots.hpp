@@ -290,6 +290,50 @@ public:
     }
 
     /**
+     * \brief Sample n values from the snapshot, calling a function for each
+     * sampled value
+     *
+     * \tparam Handler The handler type
+     *
+     * The handler will receive a const metric_value and quantile
+     *
+     * \param max_to_visit The maximum number of values
+     * \param hnd The handler to call for each metric_value in the snapshot
+     */
+    template <typename Handler>
+    void sample(std::size_t max_to_visit, Handler hnd) const
+    {
+        long double q_proportion = 1.0L / std::min(
+            static_cast<long double>(max_to_visit + 1),
+            static_cast<long double>(values_.size() - 1));
+
+        for (std::size_t i = 0; i < max_to_visit; i++) {
+            long double q = q_proportion * (i + 1);
+
+            auto pos = q * (values_.size() + 1);
+            auto index = static_cast<std::size_t>(pos);
+            if (index >= values_.size())
+                return;
+
+            if (index < 1) {
+                hnd(min(), pos * 100 / static_cast<long double>(values_.size() + 1));
+                continue;
+            }
+
+            if (index >= values_.size()) {
+                hnd(max(), pos * 100 / static_cast<long double>(values_.size() + 1));
+                continue;
+            }
+
+            hnd(values_[index - 1] +
+                    metric_value(
+                        (pos - static_cast<double>(index)) *
+                        static_cast<long double>(values_[index] - values_[index - 1])),
+                pos * 100 / static_cast<long double>(values_.size() + 1));
+        }
+    }
+
+    /**
      * \brief Get the mean value in the snapshot
      *
      * \return the snapshot mean

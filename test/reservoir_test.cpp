@@ -99,7 +99,7 @@ TEST_CASE("Simple Reservoir threaded updates with snapshots", "[reservoir]")
     for (int i = 0; i < 1000; i++)
     {
         auto s = r.snapshot();
-        CAPTURE(i)
+        CAPTURE(i);
         REQUIRE(s.size() >= minsize);
     }
 
