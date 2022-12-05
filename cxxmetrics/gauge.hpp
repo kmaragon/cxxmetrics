@@ -216,7 +216,7 @@ class gauge : public gauges::primitive_gauge<TGaugeType, TAggregation>, public m
 {
 public:
     explicit gauge(const TGaugeType& value = TGaugeType()) noexcept :
-            gauges::primitive_gauge<TGaugeType>(value)
+            gauges::primitive_gauge<TGaugeType, TAggregation>(value)
     { }
     gauge(const gauge& copy) = default;
     gauge(gauge&& mv) = default;

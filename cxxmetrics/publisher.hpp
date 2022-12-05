@@ -195,30 +195,42 @@ class histogram_publish_options : public virtual value_publish_options
         static auto def = std::make_shared<quantile_options<quantile(50.0l), quantile(90.0l), quantile(99.0l)>>();
         return def;
     }
+
     std::shared_ptr<basic_quantile_options> quantiles_;
     bool count_;
+    bool asdist_;
 public:
     histogram_publish_options(histogram_publish_options&& other) noexcept :
             value_publish_options(std::move(other)),
             quantiles_(std::move(other.quantiles_)),
-            count_(other.count_)
+            count_(other.count_),
+            asdist_(other.asdist_)
     { }
 
     histogram_publish_options(const scale_factor& sf = scale_factor()) noexcept :
             value_publish_options(sf),
-            count_(true)
+            count_(true),
+            asdist_(false)
     { }
 
     histogram_publish_options(bool publish_count, const scale_factor& sf = scale_factor()) noexcept :
             value_publish_options(sf),
-            count_(publish_count)
+            count_(publish_count),
+            asdist_(false)
+    { }
+
+    histogram_publish_options(bool publish_count, bool as_distribution, const scale_factor& sf = scale_factor()) noexcept :
+        value_publish_options(sf),
+        count_(publish_count),
+        asdist_(as_distribution)
     { }
 
     template<typename TQuantileOptions, typename = typename std::enable_if<std::is_base_of<basic_quantile_options, TQuantileOptions>::value, void>::type>
-    histogram_publish_options(TQuantileOptions&& quantile_options, bool publish_count = true, const scale_factor& sf = scale_factor()) :
+    histogram_publish_options(TQuantileOptions&& quantile_options, bool publish_count = true, bool as_distribution = false, const scale_factor& sf = scale_factor()) :
             value_publish_options(sf),
             quantiles_(std::make_unique<TQuantileOptions>(std::forward<TQuantileOptions>(quantile_options))),
-            count_(publish_count)
+            count_(publish_count),
+            asdist_(as_distribution)
     { }
 
     histogram_publish_options& operator=(histogram_publish_options&& other) noexcept
@@ -226,6 +238,7 @@ public:
         value_publish_options::operator=(std::move(other));
         quantiles_ = std::move(other.quantiles_);
         count_ = other.count_;
+        asdist_ = other.asdist_;
         return *this;
     }
 
@@ -247,6 +260,10 @@ public:
      */
     bool include_count() const noexcept {
         return count_;
+    }
+
+    bool as_distribution() const noexcept {
+      return asdist_;
     }
 };
 
