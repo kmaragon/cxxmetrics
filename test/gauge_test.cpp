@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <cxxmetrics/gauge.hpp>
 
 using namespace std;
@@ -30,8 +30,8 @@ TEST_CASE("Functional Gauge works", "[gauge]")
     REQUIRE(g.get() == 99.81);
 
     value = 10000;
-    REQUIRE_THAT(g.get(), Catch::WithinULP(10000.0, 1));
-    REQUIRE_THAT(g.snapshot().value(), Catch::WithinULP(10000.0, 1));
+    REQUIRE_THAT(g.get(), Catch::Matchers::WithinULP(10000.0, 1));
+    REQUIRE_THAT(g.snapshot().value(), Catch::Matchers::WithinULP(10000.0, 1));
 }
 
 TEST_CASE("Pointer Gauge works", "[gauge]")
@@ -41,8 +41,8 @@ TEST_CASE("Pointer Gauge works", "[gauge]")
     REQUIRE(g.get() == 70);
 
     v = 500.017f;
-    REQUIRE_THAT(g.get(), Catch::WithinULP(500.017f, 1));
-    REQUIRE_THAT(g.snapshot().value(), Catch::WithinULP(500.017f, 1));
+    REQUIRE_THAT(g.get(), Catch::Matchers::WithinULP(500.017f, 1));
+    REQUIRE_THAT(g.snapshot().value(), Catch::Matchers::WithinULP(500.017f, 1));
 
     float x = 0;
     gauge<float *> h(&x);

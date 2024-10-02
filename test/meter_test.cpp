@@ -1,7 +1,6 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <thread>
 #include <cxxmetrics/meter.hpp>
-#include <ctti/type_id.hpp>
 #include "helpers.hpp"
 
 using namespace std;
@@ -64,7 +63,7 @@ TEST_CASE("Meter rates are passed on", "[meter]")
     REQUIRE(m.get_rate<1>()> m.get_rate<8>());
     REQUIRE(m.get_rate<8>()> m.get_rate<20>());
     REQUIRE(m.get_rate<20>()> m.get_rate<50>());
-    REQUIRE_THAT(m.mean(), Catch::WithinULP(1100.0 / 111.0, 1));
+    REQUIRE_THAT(m.mean(), Catch::Matchers::WithinULP(1100.0 / 111.0, 1));
 }
 
 TEST_CASE("Meter snapshot", "[meter]")

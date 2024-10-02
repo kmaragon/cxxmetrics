@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <cxxmetrics/simple_reservoir.hpp>
 #include <cxxmetrics/uniform_reservoir.hpp>
 #include <cxxmetrics/sliding_window.hpp>
@@ -20,11 +20,11 @@ TEST_CASE("Uniform Reservoir on exact count", "[reservoir]")
 
     auto s = r.snapshot();
 
-    REQUIRE_THAT(s.min(), Catch::WithinULP(10.0, 1));
-    REQUIRE_THAT(s.max(), Catch::WithinULP(45.0, 1));
+    REQUIRE_THAT(s.min(), Catch::Matchers::WithinULP(10.0, 1));
+    REQUIRE_THAT(s.max(), Catch::Matchers::WithinULP(45.0, 1));
     REQUIRE(std::abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
     REQUIRE(std::abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
-    REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
+    REQUIRE_THAT(s.mean(), Catch::Matchers::WithinULP(28.0, 1));
 
     uniform_reservoir<double, 5> q = r;
 }
@@ -65,11 +65,11 @@ TEST_CASE("Simple Reservoir overflow", "[reservoir]")
 
     auto s = r.snapshot();
 
-    REQUIRE_THAT(s.min(), Catch::WithinULP(10.0, 1));
-    REQUIRE_THAT(s.max(), Catch::WithinULP(45.0, 1));
+    REQUIRE_THAT(s.min(), Catch::Matchers::WithinULP(10.0, 1));
+    REQUIRE_THAT(s.max(), Catch::Matchers::WithinULP(45.0, 1));
     REQUIRE(std::abs(static_cast<double>(s.value<99_p>()) - 45.0) < 1);
     REQUIRE(std::abs(static_cast<double>(s.value<60_p>()) - 35.0) <= 1);
-    REQUIRE_THAT(s.mean(), Catch::WithinULP(28.0, 1));
+    REQUIRE_THAT(s.mean(), Catch::Matchers::WithinULP(28.0, 1));
 
     simple_reservoir<double, 5> q = r;
 }
@@ -137,11 +137,11 @@ TEST_CASE("Sliding Window Reservoir only gets window data", "[reservoir]")
 
     auto s = r.snapshot();
 
-    REQUIRE_THAT(s.min(), Catch::WithinULP(20.0, 1));
-    REQUIRE_THAT(s.max(), Catch::WithinULP(60.0, 1));
+    REQUIRE_THAT(s.min(), Catch::Matchers::WithinULP(20.0, 1));
+    REQUIRE_THAT(s.max(), Catch::Matchers::WithinULP(60.0, 1));
     REQUIRE(std::abs(static_cast<double>(s.value<99_p>()) - 60.0) < 1);
     REQUIRE(std::abs(static_cast<double>(s.value<60_p>()) - 40.0) <= 1);
-    REQUIRE_THAT(s.mean(), Catch::WithinULP(37.5, 1));
+    REQUIRE_THAT(s.mean(), Catch::Matchers::WithinULP(37.5, 1));
 
     sliding_window_reservoir<double, 10, mock_clock> q = r;
 }

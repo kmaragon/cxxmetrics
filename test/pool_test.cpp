@@ -1,11 +1,11 @@
-#include <gtest/gtest.h>
+#include <catch2/catch_all.hpp>
 #include <execinfo.h>
 #include <cxxmetrics/pool.hpp>
 
 using namespace cxxmetrics::internal;
 using namespace std;
 
-TEST(pool_tests, allocates_and_frees_objects)
+TEST_CASE("Pool allocates and frees objects")
 {
     pool<string> p;
 

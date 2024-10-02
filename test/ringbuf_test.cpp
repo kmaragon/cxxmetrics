@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <cxxmetrics/ringbuf.hpp>
 
 using namespace std;
@@ -24,10 +24,10 @@ TEST_CASE("Ringbuf can push full circle", "[ringbuf]")
     values.assign(subject.begin(), subject.end());
 
     REQUIRE(values.size() == 6);
-    REQUIRE_THAT(values[5], Catch::WithinULP(1558771.05, 1));
-    REQUIRE_THAT(values[4], Catch::WithinULP(-91080.0, 1));
-    REQUIRE_THAT(values[3], Catch::WithinULP(-99.0, 1));
-    REQUIRE_THAT(values[2], Catch::WithinULP(1.0, 1));
-    REQUIRE_THAT(values[1], Catch::WithinULP(120000.0001, 1));
-    REQUIRE_THAT(values[0], Catch::WithinULP(8.9, 1));
+    REQUIRE_THAT(values[5], Catch::Matchers::WithinULP(1558771.05, 1));
+    REQUIRE_THAT(values[4], Catch::Matchers::WithinULP(-91080.0, 1));
+    REQUIRE_THAT(values[3], Catch::Matchers::WithinULP(-99.0, 1));
+    REQUIRE_THAT(values[2], Catch::Matchers::WithinULP(1.0, 1));
+    REQUIRE_THAT(values[1], Catch::Matchers::WithinULP(120000.0001, 1));
+    REQUIRE_THAT(values[0], Catch::Matchers::WithinULP(8.9, 1));
 }

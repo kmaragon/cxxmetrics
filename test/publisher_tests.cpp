@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <thread>
 #include <cxxmetrics/metrics_registry.hpp>
 #include <cxxmetrics/simple_reservoir.hpp>
@@ -132,31 +132,31 @@ TEST_CASE("Publisher metric types are correctly resolved", "[publisher]")
     metrics_registry<> r;
     test_publisher<> subject(r);
     auto myCounter = r.counter("MyCounter");
-    REQUIRE(subject.type_of("MyCounter") == "counter");
+    REQUIRE(subject.type_of("MyCounter").find("counter") != std::string::npos);
 
     r.ewma<1_min>("MyEWMA");
-    REQUIRE(subject.type_of("MyEWMA") == "ewma");
+    REQUIRE(subject.type_of("MyEWMA").find("ewma") != std::string::npos);
 
     r.gauge("Gauge"/"Ref"_m, gaugeProvider);
     r.gauge("Gauge"/"Ptr"_m, &gp2);
-    REQUIRE(subject.type_of("Gauge"/"Ref"_m) == "gauge");
-    REQUIRE(subject.type_of("Gauge"/"Ptr"_m) == "gauge");
+    REQUIRE(subject.type_of("Gauge"/"Ref"_m).find("gauge") != std::string::npos);
+    REQUIRE(subject.type_of("Gauge"/"Ptr"_m).find("gauge") != std::string::npos);
 
     r.histogram("HistogramS", simple_reservoir<long, 100>());
     r.histogram("HistogramU", uniform_reservoir<long, 100>());
     r.histogram("HistogramW", sliding_window_reservoir<long, 100>(100s));
-    REQUIRE(subject.type_of("HistogramS") == "histogram");
-    REQUIRE(subject.type_of("HistogramU") == "histogram");
-    REQUIRE(subject.type_of("HistogramW") == "histogram");
+    REQUIRE(subject.type_of("HistogramS").find("histogram") != std::string::npos);
+    REQUIRE(subject.type_of("HistogramU").find("histogram") != std::string::npos);
+    REQUIRE(subject.type_of("HistogramW").find("histogram") != std::string::npos);
 
     r.meter<1_sec, 1_min, 1_sec, 5_min>("Meter");
-    REQUIRE(subject.type_of("Meter") == "meter");
+    REQUIRE(subject.type_of("Meter").find("meter") != std::string::npos);
 
     r.timer<1_sec, std::chrono::system_clock, simple_reservoir<typename std::chrono::system_clock::duration, 1024>, 1_min, 5_min>("TimerVerbose");
-    REQUIRE(subject.type_of("TimerVerbose") == "timer");
+    REQUIRE(subject.type_of("TimerVerbose").find("timer") != std::string::npos);
 
     r.register_existing("MyCounter"/"Alias"_m, myCounter);
-    REQUIRE(subject.type_of("MyCounter"/"Alias"_m) == "counter");
+    REQUIRE(subject.type_of("MyCounter"/"Alias"_m).find("counter") != std::string::npos);
 
     REQUIRE(subject.type_of("NonExistent"/"Metric"_m).empty());
 }
@@ -214,7 +214,7 @@ TEST_CASE("Publisher can get value publish options", "[publisher]")
     auto visitor = [&](const metric_path& path, basic_registered_metric& metric) {
         ++count;
         metric.aggregate([&](const value_snapshot& ss) {
-            if (subject.type_of(metric) != "counter")
+            if (subject.type_of(metric).find("counter") == std::string::npos)
                 return;
 
             auto& opts = subject.opts(metric);
@@ -248,7 +248,7 @@ TEST_CASE("Publisher can handle metric overrides on publish options", "[publishe
     auto visitor = [&](const metric_path& path, basic_registered_metric& metric) {
         ++count;
         metric.aggregate([&](const value_snapshot& ss) {
-            if (subject.type_of(metric) != "counter")
+            if (subject.type_of(metric).find("counter") == std::string::npos)
                 return;
 
             auto& opts = subject.opts(metric);

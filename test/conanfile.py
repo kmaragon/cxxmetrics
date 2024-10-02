@@ -1,30 +1,27 @@
 import os
 
-from conans import ConanFile, CMake, tools
+from conan import ConanFile
+from conan.tools.build import can_run
+from conan.tools.cmake import cmake_layout, CMake
 
 class CxxmetricsTestConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
-    generators = "cmake"
-    exports = "CMakeLists.txt", "../test*"
-    build_requires = "catch2/2.13.9"
+    generators = "CMakeDeps", "CMakeToolchain"
 
-    def source(self):
-        tools.replace_in_file("CMakeLists.txt", "project(\"cxxmetrics_test\" CXX)", '''project("cxxmetrics_test" CXX)
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS NO_OUTPUT_DIRS)''')
+    def requirements(self):
+        self.requires(self.tested_reference_str)
+        self.requires("catch2/3.7.1")
+
+    def layout(self):
+        cmake_layout(self)
 
     def build(self):
-        cmake = CMake(self)
-        # Current dir is "test_package/build/<build_id>" and CMakeLists.txt is
-        # in "test_package"
-        cmake.configure()
-        cmake.build()
-
-    def imports(self):
-        self.copy("*.dll", dst="bin", src="bin")
-        self.copy("*.dylib*", dst="bin", src="lib")
-        self.copy('*.so*', dst='bin', src='lib')
+        if can_run(self):
+            cmake = CMake(self)
+            cmake.configure()
+            cmake.build()
 
     def test(self):
-        if not tools.cross_building(self.settings):
-            self.run(".%scxxmetrics_test" % os.sep)
+        if can_run(self):
+            bin_path = os.path.join(self.cpp.build.bindir, "cxxmetrics_test")
+            self.run(bin_path, env="conanrun")

@@ -1,6 +1,9 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.21)
 project(cxxmetrics C CXX)
 
+include("${CMAKE_BINARY_DIR}/build/${CMAKE_BUILD_TYPE}/generators/conan_toolchain.cmake")
+
+message(${CMAKE_MODULE_PATH})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
 set(CMAKE_CXX_STANDARD 14)
@@ -16,8 +19,8 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Coverage")
     link_libraries(gcov)
 endif()
 
-include(Conan)
-conan_include("conanfile.py")
+set(cxxmetrics_DIR "${CMAKE_SOURCE_DIR}/cxxmetrics" CACHE FILEPATH "cxxmetrics directory" FORCE)
+set(cxxmetrics_FOUND TRUE CACHE BOOL "cxxmetrics found" FORCE)
 
 add_subdirectory(cxxmetrics)
 add_subdirectory(cxxmetrics_prometheus)

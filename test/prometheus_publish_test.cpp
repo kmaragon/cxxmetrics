@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <sstream>
 #include <cxxmetrics_prometheus/prometheus_publisher.hpp>
 #include <cxxmetrics/simple_reservoir.hpp>
@@ -18,14 +18,14 @@ TEST_CASE("Prometheus Publisher can publish counter values", "[prometheus]")
 
     auto out = stream.str();
     WARN(out);
-    REQUIRE_THAT(out, Catch::StartsWith( "# TYPE ") &&
-            Catch::Contains(" untyped") &&
-            Catch::Contains("1MyCounter") &&
-            Catch::Contains("1200100") &&
-            Catch::Contains(":COUNTER") &&
-            Catch::Contains("tag_value\\\"with quotes\\\"") &&
-            Catch::Contains("x2=\"123523\"") &&
-            Catch::Contains("tag_name2__"));
+    REQUIRE_THAT(out, Catch::Matchers::StartsWith( "# TYPE ") &&
+            Catch::Matchers::ContainsSubstring(" untyped") &&
+            Catch::Matchers::ContainsSubstring("1MyCounter") &&
+            Catch::Matchers::ContainsSubstring("1200100") &&
+            Catch::Matchers::ContainsSubstring(":COUNTER") &&
+            Catch::Matchers::ContainsSubstring("tag_value\\\"with quotes\\\"") &&
+            Catch::Matchers::ContainsSubstring("x2=\"123523\"") &&
+            Catch::Matchers::ContainsSubstring("tag_name2__"));
 }
 
 TEST_CASE("Prometheus Publisher can publish gauge values", "[prometheus]")
@@ -40,11 +40,11 @@ TEST_CASE("Prometheus Publisher can publish gauge values", "[prometheus]")
 
     auto out = stream.str();
     WARN(out);
-    REQUIRE_THAT(out, Catch::StartsWith( "# TYPE MyGauge:value gauge") &&
-            Catch::Contains("MyGauge:value") &&
-            Catch::Contains("tag_name2=\"tag_value\"") &&
-            Catch::Contains("923.005") &&
-            Catch::Contains("x2=\"123523\""));
+    REQUIRE_THAT(out, Catch::Matchers::StartsWith( "# TYPE MyGauge:value gauge") &&
+            Catch::Matchers::ContainsSubstring("MyGauge:value") &&
+            Catch::Matchers::ContainsSubstring("tag_name2=\"tag_value\"") &&
+            Catch::Matchers::ContainsSubstring("923.005") &&
+            Catch::Matchers::ContainsSubstring("x2=\"123523\""));
 }
 
 TEST_CASE("Prometheus Publisher can publish meter values", "[prometheus]")
@@ -60,14 +60,14 @@ TEST_CASE("Prometheus Publisher can publish meter values", "[prometheus]")
 
     auto out = stream.str();
     WARN(out);
-    REQUIRE_THAT(out, Catch::StartsWith( "# TYPE MyMeter gauge") &&
-            Catch::Contains("MyMeter") &&
-            Catch::Contains("tag_name2=\"tag_value\"") &&
-            Catch::Contains("mean") &&
-            Catch::Contains("1sec") &&
-            Catch::Contains("1min") &&
-            Catch::Contains("5min") &&
-            Catch::Contains("x2=\"123523\""));
+    REQUIRE_THAT(out, Catch::Matchers::StartsWith( "# TYPE MyMeter gauge") &&
+            Catch::Matchers::ContainsSubstring("MyMeter") &&
+            Catch::Matchers::ContainsSubstring("tag_name2=\"tag_value\"") &&
+            Catch::Matchers::ContainsSubstring("mean") &&
+            Catch::Matchers::ContainsSubstring("1sec") &&
+            Catch::Matchers::ContainsSubstring("1min") &&
+            Catch::Matchers::ContainsSubstring("5min") &&
+            Catch::Matchers::ContainsSubstring("x2=\"123523\""));
 }
 
 TEST_CASE("Prometheus Publisher can publish histogram values", "[prometheus]")
@@ -84,12 +84,12 @@ TEST_CASE("Prometheus Publisher can publish histogram values", "[prometheus]")
 
     auto out = stream.str();
     WARN(out);
-    REQUIRE_THAT(out, Catch::Contains( "# TYPE MyHistogram summary") &&
-            Catch::Contains("MyHistogram_count") &&
-            Catch::Contains("mytag=\"tagvalue2\"") &&
-            Catch::Contains(".5") &&
-            Catch::Contains(".9") &&
-            Catch::Contains(".99"));
+    REQUIRE_THAT(out, Catch::Matchers::ContainsSubstring( "# TYPE MyHistogram summary") &&
+            Catch::Matchers::ContainsSubstring("MyHistogram_count") &&
+            Catch::Matchers::ContainsSubstring("mytag=\"tagvalue2\"") &&
+            Catch::Matchers::ContainsSubstring(".5") &&
+            Catch::Matchers::ContainsSubstring(".9") &&
+            Catch::Matchers::ContainsSubstring(".99"));
 }
 
 TEST_CASE("Prometheus Publisher can publish timer values", "[prometheus]")
@@ -109,16 +109,16 @@ TEST_CASE("Prometheus Publisher can publish timer values", "[prometheus]")
 
     auto out = stream.str();
     WARN(out);
-    REQUIRE_THAT(out, Catch::Contains( "# TYPE MyTimer summary") &&
-            Catch::Contains("MyTimer_count") &&
-            Catch::Contains(".5") &&
-            Catch::Contains(".9") &&
-            Catch::Contains(".99") &&
-            Catch::Contains("tag_name2=\"tag_value\"") &&
-            Catch::Contains("mean") &&
-            Catch::Contains("10sec") &&
-            Catch::Contains("1usec") &&
-            Catch::Contains("1min") &&
-            Catch::Contains("5min") &&
-            Catch::Contains("x2=\"123523\""));
+    REQUIRE_THAT(out, Catch::Matchers::ContainsSubstring( "# TYPE MyTimer summary") &&
+            Catch::Matchers::ContainsSubstring("MyTimer_count") &&
+            Catch::Matchers::ContainsSubstring(".5") &&
+            Catch::Matchers::ContainsSubstring(".9") &&
+            Catch::Matchers::ContainsSubstring(".99") &&
+            Catch::Matchers::ContainsSubstring("tag_name2=\"tag_value\"") &&
+            Catch::Matchers::ContainsSubstring("mean") &&
+            Catch::Matchers::ContainsSubstring("10sec") &&
+            Catch::Matchers::ContainsSubstring("1usec") &&
+            Catch::Matchers::ContainsSubstring("1min") &&
+            Catch::Matchers::ContainsSubstring("5min") &&
+            Catch::Matchers::ContainsSubstring("x2=\"123523\""));
 }

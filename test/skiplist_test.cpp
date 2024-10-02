@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+#include <catch2/catch_all.hpp>
 #include <string>
 #include <thread>
 #include <mutex>

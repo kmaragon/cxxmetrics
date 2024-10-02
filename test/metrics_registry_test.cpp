@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <thread>
 #include <cxxmetrics/metrics_registry.hpp>
 #include <cxxmetrics/simple_reservoir.hpp>

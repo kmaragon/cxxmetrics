@@ -10,7 +10,6 @@ macro(target_sources_local target) # https://gitlab.kitware.com/cmake/cmake/issu
 		endif()
 		list(APPEND _srcList ${src})
 	endforeach()
-	message("SOURCES: ${_srcList}")
 	target_sources(${target} ${_srcList})
 endmacro()
 
@@ -39,14 +38,9 @@ set(HEADERS
         uniform_reservoir.hpp
 )
 
-add_library(cxxmetrics INTERFACE)
-target_include_directories(cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../")
-target_sources_local(cxxmetrics INTERFACE ${HEADERS})
-target_link_libraries(cxxmetrics INTERFACE atomic CONAN_PKG::ctti)
+add_library(cxxmetrics::cxxmetrics INTERFACE IMPORTED GLOBAL)
+target_include_directories(cxxmetrics::cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../")
+target_sources_local(cxxmetrics::cxxmetrics INTERFACE ${HEADERS})
+target_link_libraries(cxxmetrics::cxxmetrics INTERFACE atomic)
 
 install(FILES ${HEADERS} DESTINATION "include/cxxmetrics")
-
-install(TARGETS cxxmetrics
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
-)

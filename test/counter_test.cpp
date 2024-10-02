@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <cxxmetrics/counter.hpp>
 
 using namespace cxxmetrics;
@@ -21,7 +21,7 @@ TEST_CASE("Counter incr and wrappers work", "[counter]")
     a = 10;
     REQUIRE(a == 10);
 
-    REQUIRE(a.metric_type().substr(0, 20) == "cxxmetrics::counter<");
+    REQUIRE(a.metric_type().find("counter") != std::string::npos);
 }
 
 TEST_CASE("Counter excercise snapshot", "[counter]")

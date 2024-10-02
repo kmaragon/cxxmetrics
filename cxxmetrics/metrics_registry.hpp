@@ -151,7 +151,7 @@ class basic_registered_metric
     get_or_create_publish_data(TConstructArgs&&... args)
     {
         std::lock_guard<std::mutex> lock(pubdatalock_);
-        auto key = ctti::nameof<TDataType>().str();
+        auto key = typeid(TDataType).name();
         auto& ptr = pubdata_[key];
 
         if (!ptr)
@@ -165,7 +165,7 @@ class basic_registered_metric
     try_get_publish_data() const
     {
         std::lock_guard<std::mutex> lock(pubdatalock_);
-        auto fnd = pubdata_.find(ctti::nameof<TDataType>().str());
+        auto fnd = pubdata_.find(typeid(TDataType).name());
         if (fnd == pubdata_.end())
             return nullptr;
 
@@ -403,7 +403,7 @@ typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value
 basic_default_repository<TAlloc>::get_publish_data(TConstructArgs&&... args)
 {
     std::lock_guard<std::mutex> lock(datalock_);
-    auto key = ctti::nameof<TDataType>().str();
+    auto key = typeid(TDataType).name();
     auto& ptr = data_[key];
 
     if (!ptr)
@@ -418,8 +418,8 @@ typename std::enable_if<std::is_base_of<basic_publish_options, TDataType>::value
 basic_default_repository<TAlloc>::get_publish_data() const
 {
     std::lock_guard<std::mutex> lock(datalock_);
-    auto key = ctti::nameof<TDataType>().str();
-    auto fnd = data_.find(ctti::nameof<TDataType>().str());
+    auto key = typeid(TDataType).name();
+    auto fnd = data_.find(typeid(TDataType).name());
     if (fnd == data_.end())
         return nullptr;
 

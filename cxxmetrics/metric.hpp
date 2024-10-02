@@ -1,7 +1,6 @@
 #ifndef CXXMETRICS_METRIC_HPP
 #define CXXMETRICS_METRIC_HPP
 
-#include <ctti/type_id.hpp>
 #include "snapshots.hpp"
 
 #if __cplusplus < 201700L
@@ -57,9 +56,9 @@ public:
      *
      * \return the compile time type name of the metric
      */
-    static constexpr ctti::detail::cstring type_name()
+    static constexpr const char* type_name()
     {
-        return ctti::type_id<TMetricType>().name();
+        return typeid(TMetricType).name();
     }
 
     /**
@@ -73,7 +72,7 @@ public:
 template<typename TMetricType>
 std::string metric<TMetricType>::metric_type() const noexcept
 {
-    return ctti::type_id<TMetricType>().name().cppstring();
+    return typeid(TMetricType).name();
 }
 
 }
