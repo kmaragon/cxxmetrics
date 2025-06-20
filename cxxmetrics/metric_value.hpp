@@ -1,12 +1,12 @@
 #ifndef CXXMETRICS_METRIC_VALUE_HPP
 #define CXXMETRICS_METRIC_VALUE_HPP
 
+#include "bits/time.hpp"
+#include "bits/value.hpp"
 #include <chrono>
-#include <string>
 #include <cmath>
 #include <cstddef>
-#include "time.hpp"
-#include "bits/value.hpp"
+#include <string>
 
 namespace cxxmetrics
 {

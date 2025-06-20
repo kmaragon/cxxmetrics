@@ -2,7 +2,7 @@
 #define CXXMETRICS_HISTOGRAM_HPP
 
 #include "state/atomic_counter.hpp"
-#include "uniform_reservoir.hpp"
+#include "state/atomic_uniform_distribution.hpp"
 
 namespace cxxmetrics
 {
@@ -15,7 +15,7 @@ namespace cxxmetrics
  * \tparam TElem the type of element in the histogram
  * \tparam TReservoir the type of reservoir backing the histogram
  */
-template<typename TElem, typename TReservoir = uniform_reservoir<TElem, 1024>>
+template<typename TElem, typename TReservoir = atomic_uniform_distribution<TElem, 1024>>
 class histogram : public metric<histogram<TElem, TReservoir>>
 {
     TReservoir reservoir_;

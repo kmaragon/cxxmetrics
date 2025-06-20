@@ -1,11 +1,11 @@
 #ifndef CXXMETRICS_SNAPSHOTS_HPP
 #define CXXMETRICS_SNAPSHOTS_HPP
 
+#include "bits/meta.hpp"
+#include "metric_value.hpp"
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
-#include <algorithm>
-#include "meta.hpp"
-#include "metric_value.hpp"
 
 namespace cxxmetrics
 {

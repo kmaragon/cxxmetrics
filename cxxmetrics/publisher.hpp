@@ -1,10 +1,10 @@
 #ifndef CXXMETRICS_PUBLISHER_HPP
 #define CXXMETRICS_PUBLISHER_HPP
 
-#include <memory>
-#include "meta.hpp"
-#include "snapshots.hpp"
+#include "bits/meta.hpp"
 #include "metric_path.hpp"
+#include "snapshots.hpp"
+#include <memory>
 
 namespace cxxmetrics
 {

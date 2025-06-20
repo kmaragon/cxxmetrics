@@ -1,8 +1,8 @@
 #ifndef CXXMETRICS_METER_HPP
 #define CXXMETRICS_METER_HPP
 
+#include "bits/time.hpp"
 #include "ewma.hpp"
-#include "time.hpp"
 
 namespace cxxmetrics
 {

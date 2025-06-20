@@ -3,7 +3,7 @@
 
 #include "histogram.hpp"
 #include "meter.hpp"
-#include "uniform_reservoir.hpp"
+#include "state/atomic_uniform_distribution.hpp"
 
 namespace cxxmetrics
 {
@@ -16,7 +16,7 @@ namespace cxxmetrics
  * \tparam TReservoir The type of reservoir to use for the underlying histogram of timings
  * \tparam TWindows The meter periods to track rates of, for example: 10_sec, 1_min, 1_hour
  */
-template<period::value TRateInterval = time::seconds(1), typename TClock = std::chrono::system_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, period::value... TWindows>
+template<period::value TRateInterval = time::seconds(1), typename TClock = std::chrono::system_clock, typename TReservoir = atomic_uniform_distribution<typename TClock::duration, 1024>, period::value... TWindows>
 class timer : public metric<timer<TRateInterval, TClock, TReservoir, TWindows...>>
 {
     histogram<typename TClock::duration, TReservoir> histogram_;

@@ -599,7 +599,7 @@ public:
      *
      * \return the histogram at the path specified with the tags specified
      */
-    template<typename TReservoir = uniform_reservoir<int64_t, 1024>>
+    template<typename TReservoir = atomic_uniform_distribution<int64_t, 1024>>
     std::shared_ptr<cxxmetrics::histogram<typename TReservoir::value_type, TReservoir>> histogram(const metric_path& name,
             TReservoir&& reservoir = TReservoir(),
             const tag_collection& tags = tag_collection());
@@ -637,7 +637,7 @@ public:
      *
      * \return the timer at the path specified with the tags specified
      */
-    template<period::value TRateInterval, typename TClock = std::chrono::steady_clock, typename TReservoir = uniform_reservoir<typename TClock::duration, 1024>, period::value... TRateWindows>
+    template<period::value TRateInterval, typename TClock = std::chrono::steady_clock, typename TReservoir = atomic_uniform_distribution<typename TClock::duration, 1024>, period::value... TRateWindows>
     std::shared_ptr<cxxmetrics::timer<TRateInterval, TClock, TReservoir, TRateWindows...>> timer(const metric_path& name,
             TReservoir&& reservoir = TReservoir(),
             const tag_collection& tags = tag_collection());
@@ -654,7 +654,7 @@ public:
      * \tparam TReservoirSize the size of the reservoir
      * \tparam TRateWindows the windows over which to track the rate of timed calls
      */
-    template<period::value TRateInterval = time::seconds(1), template<typename, std::size_t> typename TReservoir = uniform_reservoir, std::size_t TSize = 1024, period::value... TRateWindows>
+    template<period::value TRateInterval = time::seconds(1), template<typename, std::size_t> typename TReservoir = atomic_uniform_distribution, std::size_t TSize = 1024, period::value... TRateWindows>
     std::shared_ptr<cxxmetrics::timer<TRateInterval, std::chrono::steady_clock, TReservoir<typename std::chrono::steady_clock::duration, TSize>, TRateWindows...>>
     timer(const metric_path& name, const tag_collection& tags = tag_collection())
     {

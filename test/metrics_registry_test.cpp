@@ -1,8 +1,8 @@
 #include <../cxxmetrics/state/simple_reservoir.hpp>
+#include <../cxxmetrics/state/sliding_window.hpp>
+#include <../cxxmetrics/state/uniform_reservoir.hpp>
 #include <catch2/catch_all.hpp>
 #include <cxxmetrics/metrics_registry.hpp>
-#include <cxxmetrics/sliding_window.hpp>
-#include <cxxmetrics/uniform_reservoir.hpp>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -90,7 +90,7 @@ TEST_CASE("Registry supports all the types", "[metrics_registry]")
     subject.ewma<1_min>("averages"_m/"MyEWMA"/"P2");
     subject.gauge("Gauge"_m/"Other", gaugeProvider);
     subject.histogram("H"_m/"istogramS", simple_reservoir<long, 100>());
-    subject.histogram("H"_m/"istogramU", uniform_reservoir<long, 100>());
+    subject.histogram("H"_m/"istogramU", atomic_uniform_distribution<long, 100>());
     subject.histogram("H"_m/"istogramW", sliding_window_reservoir<long, 100>(100s));
     subject.meter<1_sec, 1_min, 1_sec, 5_min>("Meter");
     subject.timer<1_sec, std::chrono::system_clock, simple_reservoir<typename std::chrono::system_clock::duration, 1024>, 1_min, 5_min>("TimerVerbose");

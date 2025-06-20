@@ -45,7 +45,7 @@ public:
    * to them. They are designed to not be shared. They will have less of a
    * performance impact but will not play well in multi-threaded environments.
    */
-  [[nodiscard]] virtual bool is_atomic() const = 0;
+  [[nodiscard]] virtual bool is_atomic() const noexcept = 0;
 };
 
 /**

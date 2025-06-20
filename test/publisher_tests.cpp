@@ -1,7 +1,7 @@
 #include <../cxxmetrics/state/simple_reservoir.hpp>
+#include <../cxxmetrics/state/sliding_window.hpp>
 #include <catch2/catch_all.hpp>
 #include <cxxmetrics/metrics_registry.hpp>
-#include <cxxmetrics/sliding_window.hpp>
 #include <thread>
 
 using namespace cxxmetrics;
@@ -143,7 +143,7 @@ TEST_CASE("Publisher metric types are correctly resolved", "[publisher]")
     REQUIRE(subject.type_of("Gauge"/"Ptr"_m).find("gauge") != std::string::npos);
 
     r.histogram("HistogramS", simple_reservoir<long, 100>());
-    r.histogram("HistogramU", uniform_reservoir<long, 100>());
+    r.histogram("HistogramU", atomic_uniform_distribution<long, 100>());
     r.histogram("HistogramW", sliding_window_reservoir<long, 100>(100s));
     REQUIRE(subject.type_of("HistogramS").find("histogram") != std::string::npos);
     REQUIRE(subject.type_of("HistogramU").find("histogram") != std::string::npos);

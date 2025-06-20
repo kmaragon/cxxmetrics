@@ -1,9 +1,7 @@
-#ifndef CXXMETRICS_TIME_HPP
-#define CXXMETRICS_TIME_HPP
+#pragma once
 
-#include <unordered_map>
-#include <chrono>
 #include "meta.hpp"
+#include <chrono>
 
 namespace cxxmetrics
 {
@@ -15,9 +13,9 @@ public:
     constexpr time_window(unsigned long long value) :
             value_(value) {}
 
-    constexpr operator templates::sortable_template_type()
+    constexpr operator detail::sortable_template_type()
     {
-        return (templates::sortable_template_type) value_;
+        return (detail::sortable_template_type) value_;
     }
 
 };
@@ -28,7 +26,7 @@ public:
 class period
 {
 public:
-    using value = templates::sortable_template_type;
+    using value = detail::sortable_template_type;
 
 private:
     const value value_;
@@ -37,9 +35,9 @@ public:
     constexpr period(value v) :
             value_(v) {}
 
-    constexpr operator templates::sortable_template_type() const
+    constexpr operator detail::sortable_template_type() const
     {
-        return (templates::sortable_template_type) value_;
+        return (detail::sortable_template_type) value_;
     }
 
     constexpr std::chrono::steady_clock::duration to_duration() const
@@ -135,36 +133,6 @@ constexpr period hours(period::value v)
 
 }
 
-namespace cxxmetrics_literals
-{
-
-constexpr cxxmetrics::period operator""_micro(cxxmetrics::period::value v)
-{
-    return cxxmetrics::time::microseconds(v);
-}
-
-constexpr cxxmetrics::period operator""_msec(cxxmetrics::period::value v)
-{
-    return cxxmetrics::time::milliseconds(v);
-}
-
-constexpr cxxmetrics::period operator""_sec(cxxmetrics::period::value v)
-{
-    return cxxmetrics::time::seconds(v);
-}
-
-constexpr cxxmetrics::period operator""_min(cxxmetrics::period::value v)
-{
-    return cxxmetrics::time::minutes(v);
-}
-
-constexpr cxxmetrics::period operator""_hour(cxxmetrics::period::value v)
-{
-    return cxxmetrics::time::hours(v);
-}
-
-}
-
 namespace std
 {
 
@@ -181,4 +149,3 @@ struct hash<std::chrono::duration<_rep, ratio>>
 
 }
 
-#endif //CXXMETRICS_TIME_HPP

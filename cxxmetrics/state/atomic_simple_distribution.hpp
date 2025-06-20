@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../bits/atomic/ringbuf.hpp"
-#include "source.hpp"
+#include "distribution.hpp"
 
 namespace cxxmetrics::state {
 
@@ -9,21 +9,21 @@ namespace cxxmetrics::state {
  * \brief A type of reservoir that simply keep the Size most recent values
  */
 template <typename T, size_t Size>
-class simple_atomic_distribution : public distribution<T> {
+class atomic_simple_distribution : public state::distribution<T> {
   atomic::ringbuf<T, Size> data_;
 
 public:
   using value_type = T;
 
-  simple_atomic_distribution() noexcept = default;
+  atomic_simple_distribution() noexcept = default;
 
-  simple_atomic_distribution(const simple_atomic_distribution &other) noexcept =
+  atomic_simple_distribution(const atomic_simple_distribution &other) noexcept =
       default;
 
-  ~simple_atomic_distribution() = default;
+  ~atomic_simple_distribution() = default;
 
-  simple_atomic_distribution &
-  operator=(const simple_atomic_distribution &r) noexcept = default;
+  atomic_simple_distribution &
+  operator=(const atomic_simple_distribution &r) noexcept = default;
 
   void update(const T &v) noexcept override;
 
@@ -33,10 +33,11 @@ public:
 };
 
 template <typename T, size_t Size>
-void simple_atomic_distribution<T, Size>::get(
+void atomic_simple_distribution<T, Size>::get(
     cxxmetrics::distribution &into) const {
   auto it = data_.begin();
   auto sz = data_.size();
+  into.clear();
   into.reserve(sz);
 
   for (; it != data_.end(); ++it) {
@@ -48,7 +49,7 @@ void simple_atomic_distribution<T, Size>::get(
 }
 
 template <typename T, size_t Size>
-void simple_atomic_distribution<T, Size>::update(const T &v) noexcept {
+void atomic_simple_distribution<T, Size>::update(const T &v) noexcept {
   data_.push(v);
 }
 

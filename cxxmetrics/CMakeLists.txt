@@ -14,13 +14,28 @@ macro(target_sources_local target) # https://gitlab.kitware.com/cmake/cmake/issu
 endmacro()
 
 set(HEADERS
+		bits/atomic/ringbuf.hpp
+		bits/distribution.hpp
+		bits/histogram.hpp
+		bits/meta.hpp
+		bits/time.hpp
 		bits/value.hpp
 		internal/atomic_lifo.hpp
+		metrics/counter.hpp
+		metrics/doc.hpp
+		metrics/metric_handle.hpp
 		state/atomic_counter.hpp
+		state/atomic_simple_distribution.hpp
+		state/atomic_sliding_window_distribution.hpp
+		state/atomic_uniform_distribution.hpp
+		state/basic_counter.hpp
+		state/counter.hpp
+		state/distribution.hpp
+		state/doc.hpp
+		state/source.hpp
         ewma.hpp
         gauge.hpp
         histogram.hpp
-        meta.hpp
         meter.hpp
         metric.hpp
         metric_path.hpp
@@ -29,14 +44,8 @@ set(HEADERS
         pool.hpp
         publisher.hpp
         publisher_impl.hpp
-		bits/atomic/ringbuf.hpp
-		state/simple_atomic_distribution.hpp
-        skiplist.hpp
-        sliding_window.hpp
         tag_collection.hpp
-        time.hpp
 		timer.hpp
-        uniform_reservoir.hpp
 )
 
 set(SOURCES
