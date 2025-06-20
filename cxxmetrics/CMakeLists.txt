@@ -33,7 +33,7 @@ set(HEADERS
 		state/distribution.hpp
 		state/doc.hpp
 		state/source.hpp
-        ewma.hpp
+		state/atomic_ewma.hpp
         gauge.hpp
         histogram.hpp
         meter.hpp

@@ -2,12 +2,12 @@
 #define CXXMETRICS_METRICS_REGISTRY_HPP
 
 // TODO: use shared_mutexes with C++17
-#include "ewma.hpp"
 #include "gauge.hpp"
 #include "histogram.hpp"
 #include "meter.hpp"
 #include "publisher.hpp"
 #include "state/atomic_counter.hpp"
+#include "state/atomic_ewma.hpp"
 #include "tag_collection.hpp"
 #include "timer.hpp"
 #include <memory>

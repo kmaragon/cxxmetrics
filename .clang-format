@@ -1,1 +1,4 @@
 BreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackParameters: OnePerLine
+AlignAfterOpenBracket: AlwaysBreak

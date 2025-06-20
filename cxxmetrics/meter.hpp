@@ -2,7 +2,7 @@
 #define CXXMETRICS_METER_HPP
 
 #include "bits/time.hpp"
-#include "ewma.hpp"
+#include "state/atomic_ewma.hpp"
 
 namespace cxxmetrics
 {

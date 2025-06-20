@@ -1,7 +1,7 @@
+#include "helpers.hpp"
+#include <../cxxmetrics/state/ewma.hpp>
 #include <catch2/catch_all.hpp>
 #include <thread>
-#include <cxxmetrics/ewma.hpp>
-#include "helpers.hpp"
 
 using namespace std::chrono_literals;
 using namespace cxxmetrics;
