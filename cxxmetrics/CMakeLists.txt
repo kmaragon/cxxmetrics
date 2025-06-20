@@ -23,19 +23,25 @@ set(HEADERS
 		internal/atomic_lifo.hpp
 		metrics/counter.hpp
 		metrics/doc.hpp
+		metrics/ewma.hpp
 		metrics/metric_handle.hpp
 		state/atomic_counter.hpp
+		state/atomic_ewma.hpp
 		state/atomic_simple_distribution.hpp
 		state/atomic_sliding_window_distribution.hpp
 		state/atomic_uniform_distribution.hpp
+		state/atomic_value_gauge.hpp
 		state/basic_counter.hpp
 		state/counter.hpp
 		state/distribution.hpp
 		state/doc.hpp
+		state/ewma.hpp
+		state/gauge.hpp
 		state/source.hpp
-		state/atomic_ewma.hpp
+		state/value_gauge.hpp
         gauge.hpp
         histogram.hpp
+		literals.hpp
         meter.hpp
         metric.hpp
         metric_path.hpp

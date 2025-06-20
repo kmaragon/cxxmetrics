@@ -2,3 +2,5 @@ BreakTemplateDeclarations: Yes
 BinPackArguments: false
 BinPackParameters: OnePerLine
 AlignAfterOpenBracket: AlwaysBreak
+SpaceAfterTemplateKeyword: false
+PackConstructorInitializers: CurrentLine

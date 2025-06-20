@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../bits/time.hpp"
-#include "source.hpp"
+#include "ewma.hpp"
 #include <atomic>
 #include <cmath>
 
@@ -9,14 +9,14 @@ namespace cxxmetrics::state {
 
 namespace detail {
 
-template <typename T>
+template<typename T>
 struct atomic_adder {
   void operator()(std::atomic<T> &a, const T &b) const {
     a.fetch_add(b, std::memory_order_relaxed);
   }
 };
 
-template <typename T>
+template<typename T>
 struct manual_atomic_adder {
   void operator()(std::atomic<T> &a, const T &b) const {
     while (true) {
@@ -30,34 +30,20 @@ struct manual_atomic_adder {
   }
 };
 
-template <>
+template<>
 struct atomic_adder<float> : public manual_atomic_adder<float> {};
-template <>
+template<>
 struct atomic_adder<double> : public manual_atomic_adder<double> {};
-template <>
+template<>
 struct atomic_adder<long double> : public manual_atomic_adder<long double> {};
 
-template <typename TA, typename TB>
+template<typename TA, typename TB>
 void atomic_add(std::atomic<TA> &a, const TB &b) {
   atomic_adder<TA> add;
   add(a, b);
 }
 
-template <typename ClockGet>
-class clock_traits {
-  static auto clk_point_() {
-    ClockGet *clk;
-    return (*clk)();
-  }
-
-  static auto clk_diff_() { return clk_point_() - clk_point_(); }
-
-public:
-  using clock_point = typename std::decay<decltype(clk_point_())>::type;
-  using clock_diff = typename std::decay<decltype(clk_diff_())>::type;
-};
-
-template <typename ClockGet = steady_clock_point, typename T = double>
+template<typename ClockGet = steady_clock_point, typename T = double>
 class atomic_ewma : public value_source {
   static_assert(
       std::is_arithmetic<T>::value,
@@ -68,9 +54,8 @@ public:
   using clock_diff = typename clock_traits<ClockGet>::clock_diff;
 
 private:
-  static long double alpha_;
-
   ClockGet clk_;
+  long double alpha_;
   std::atomic<T> rate_;
   clock_point last_;
   clock_diff window_;
@@ -78,11 +63,11 @@ private:
   std::atomic<T> pending_;
   std::atomic<bool> ticked_;
 
-  static constexpr double get_alpha() {
+  constexpr double get_alpha() {
     return 1 - exp((interval_.count() * -1.0l) / (window_.count() * 2.0l));
   }
 
-  template <bool Write = true>
+  template<bool Write = true>
   T tick(const clock_point &at) noexcept;
 
 public:
@@ -93,8 +78,8 @@ public:
   atomic_ewma(const atomic_ewma &e) noexcept;
   ~atomic_ewma() = default;
 
-  template <typename TAmt>
-  void mark(TAmt amount) noexcept;
+  template<typename Amt>
+  void mark(Amt amount) noexcept;
 
   bool compare_exchange(T &expectedrate, T rate) noexcept;
 
@@ -102,27 +87,38 @@ public:
 
   T rate() const noexcept;
 
+  clock_diff interval() const noexcept { return interval_; }
+
   atomic_ewma &operator=(const atomic_ewma<ClockGet, T> &c) noexcept;
 };
 
-template <typename ClockGet, typename T>
-long double atomic_ewma<ClockGet, T>::alpha_ = get_alpha();
-
-template <typename ClockGet, typename T>
+template<typename ClockGet, typename T>
 atomic_ewma<ClockGet, T>::atomic_ewma(
     const clock_diff &window,
     const clock_diff &interval,
     const ClockGet &clock) noexcept
-    : clk_(clock), rate_(0), last_(clk_()), window_(window),
-      interval_(interval), pending_(0), ticked_(false) {}
+    : clk_(clock),
+      alpha_(get_alpha()),
+      rate_(0),
+      last_(clk_()),
+      window_(window),
+      interval_(interval),
+      pending_(0),
+      ticked_(false) {}
 
-template <typename ClockGet, typename T>
+template<typename ClockGet, typename T>
 atomic_ewma<ClockGet, T>::atomic_ewma(const atomic_ewma &c) noexcept
-    : clk_(c.clk_), rate_(c.rate_.load()), last_(c.last_),
-      pending_(c.pending_.load()), ticked_(c.ticked_.load()) {}
+    : clk_(c.clk_),
+      alpha_(c.alpha_),
+      rate_(c.rate_.load()),
+      last_(c.last_),
+      window_(c.window_),
+      interval_(c.interval_),
+      pending_(c.pending_.load()),
+      ticked_(c.ticked_.load()) {}
 
-template <typename ClockGet, typename T>
-template <typename Mark>
+template<typename ClockGet, typename T>
+template<typename Mark>
 void atomic_ewma<ClockGet, T>::mark(Mark amount) noexcept {
   auto now = clk_();
 
@@ -134,27 +130,28 @@ void atomic_ewma<ClockGet, T>::mark(Mark amount) noexcept {
   atomic_add(pending_, amount);
 }
 
-template <typename ClockGet, typename T>
-bool atomic_ewma<ClockGet, T>::compare_exchange(T &expectedrate, T rate) noexcept {
+template<typename ClockGet, typename T>
+bool atomic_ewma<ClockGet, T>::compare_exchange(
+    T &expectedrate, T rate) noexcept {
   return rate_.compare_exchange_weak(
       expectedrate, rate, std::memory_order_relaxed, std::memory_order_relaxed);
 }
 
-template <typename ClockGet, typename T>
+template<typename ClockGet, typename T>
 T atomic_ewma<ClockGet, T>::rate() noexcept {
   auto now = clk_();
   return tick(now);
 }
 
-template <typename ClockGet, typename T>
+template<typename ClockGet, typename T>
 T atomic_ewma<ClockGet, T>::rate() const noexcept {
   auto now = clk_();
   // the const_cast is safe with the false template parameter
   return const_cast<atomic_ewma *>(this)->tick<false>(now);
 }
 
-template <typename ClockGet, typename T>
-template <bool Write>
+template<typename ClockGet, typename T>
+template<bool Write>
 T atomic_ewma<ClockGet, T>::tick(const clock_point &at) noexcept {
   int missed_intervals;
   clock_point last;
@@ -177,8 +174,7 @@ T atomic_ewma<ClockGet, T>::tick(const clock_point &at) noexcept {
             true,
             std::memory_order_relaxed,
             std::memory_order_relaxed)) {
-      // use constexpr if with 17
-      if (Write) {
+      if constexpr (Write) {
         // one thread sets the last timestamp
         if (!pending_.compare_exchange_weak(
                 pending,
@@ -240,8 +236,9 @@ T atomic_ewma<ClockGet, T>::tick(const clock_point &at) noexcept {
   return rate;
 }
 
-template <typename ClockGet, typename T>
-atomic_ewma<ClockGet, T> &atomic_ewma<ClockGet, T>::operator=(const atomic_ewma &c) noexcept {
+template<typename ClockGet, typename T>
+atomic_ewma<ClockGet, T> &
+atomic_ewma<ClockGet, T>::operator=(const atomic_ewma &c) noexcept {
   alpha_ = c.alpha_;
   rate_.store(c.rate_.load());
   pending_.store(c.pending_.load());
@@ -256,68 +253,38 @@ atomic_ewma<ClockGet, T> &atomic_ewma<ClockGet, T>::operator=(const atomic_ewma 
 /**
  * \brief An exponential weighted moving average metric
  */
-template <typename T = double>
-class atomic_ewma : public value_source {
+template<typename T = double>
+class atomic_ewma : public ewma<T> {
   detail::atomic_ewma<steady_clock_point, T> ewma_;
 
 public:
+  using clock_diff =
+      typename detail::atomic_ewma<steady_clock_point, T>::clock_diff;
+
   /**
    * \brief Construct an exponential weighted moving average
    *
    * \param window The window over which the average accounts for
    * \param interval The interval at which the average is calculated
    */
-  atomic_ewma() noexcept = default;
+  atomic_ewma(const clock_diff &window, const clock_diff &interval) noexcept
+      : detail::atomic_ewma<steady_clock_point, T>(window, interval) {}
+
   atomic_ewma(const atomic_ewma &ewma) noexcept = default;
 
   atomic_ewma &operator=(const atomic_ewma &e) noexcept = default;
 
-  /**
-   * \brief Mark the value in the ewma
-   *
-   * \param value the value to mark in the ewma
-   */
-  template <typename Mark>
-  typename std::enable_if<std::is_arithmetic<Mark>::value, void>::type
-  mark(Mark value) noexcept {
-    ewma_.mark(value);
+  [[nodiscard]] std::chrono::nanoseconds interval() const noexcept override {
+    return ewma_.interval();
   }
 
-  /**
-   * \brief Get the current rate in the ewma
-   *
-   * \return the rate of the ewma
-   */
-  T rate() const noexcept { return ewma_.rate(); }
+  void mark(T value) noexcept override { ewma_.mark(value); }
 
-  /**
-   * \brief Get the current rate in the ewma
-   *
-   * \return The rate of the ewma
-   */
-  T rate() noexcept { return ewma_.rate(); }
+  T rate() const noexcept override { return ewma_.rate(); }
 
-  /**
-   * \brief Convenience operator to mark a value in the moving average
-   *
-   * \param value the amount to mark
-   * \return a reference to the ewma
-   */
-  template <typename Mark>
-  typename std::enable_if<std::is_arithmetic<Mark>::value, atomic_ewma<T>>::type &
-  operator+=(
-      typename std::enable_if<std::is_arithmetic<Mark>::value, Mark>::type
-          value) noexcept {
-    mark(value);
-    return *this;
-  }
+  T rate() noexcept override { return ewma_.rate(); }
 
-  /**
-   * Get a snapshot of the moving average
-   */
-  [[nodiscard]] value get() const noexcept override { return ewma_.rate(); }
-
-  bool is_atomic() const noexcept override { return true; }
+  [[nodiscard]] bool is_atomic() const noexcept override { return true; }
 };
 
 } // namespace cxxmetrics::state

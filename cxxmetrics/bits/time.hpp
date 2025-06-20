@@ -133,6 +133,20 @@ struct steady_clock_point {
   }
 };
 
+template<typename ClockGet>
+class clock_traits {
+  static auto clk_point_() {
+    ClockGet *clk;
+    return (*clk)();
+  }
+
+  static auto clk_diff_() { return clk_point_() - clk_point_(); }
+
+public:
+  using clock_point = typename std::decay<decltype(clk_point_())>::type;
+  using clock_diff = typename std::decay<decltype(clk_diff_())>::type;
+};
+
 } // namespace cxxmetrics
 
 namespace std {
