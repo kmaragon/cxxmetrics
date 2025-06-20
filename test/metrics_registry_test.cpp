@@ -1,9 +1,9 @@
+#include <../cxxmetrics/state/simple_reservoir.hpp>
 #include <catch2/catch_all.hpp>
-#include <thread>
 #include <cxxmetrics/metrics_registry.hpp>
-#include <cxxmetrics/simple_reservoir.hpp>
-#include <cxxmetrics/uniform_reservoir.hpp>
 #include <cxxmetrics/sliding_window.hpp>
+#include <cxxmetrics/uniform_reservoir.hpp>
+#include <thread>
 
 using namespace std::chrono_literals;
 using namespace cxxmetrics;

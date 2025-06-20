@@ -14,8 +14,9 @@ macro(target_sources_local target) # https://gitlab.kitware.com/cmake/cmake/issu
 endmacro()
 
 set(HEADERS
+		bits/value.hpp
 		internal/atomic_lifo.hpp
-        counter.hpp
+		state/atomic_counter.hpp
         ewma.hpp
         gauge.hpp
         histogram.hpp
@@ -28,8 +29,8 @@ set(HEADERS
         pool.hpp
         publisher.hpp
         publisher_impl.hpp
-        ringbuf.hpp
-        simple_reservoir.hpp
+		bits/atomic/ringbuf.hpp
+		state/simple_atomic_distribution.hpp
         skiplist.hpp
         sliding_window.hpp
         tag_collection.hpp
@@ -38,9 +39,12 @@ set(HEADERS
         uniform_reservoir.hpp
 )
 
-add_library(cxxmetrics::cxxmetrics INTERFACE IMPORTED GLOBAL)
-target_include_directories(cxxmetrics::cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../")
-target_sources_local(cxxmetrics::cxxmetrics INTERFACE ${HEADERS})
-target_link_libraries(cxxmetrics::cxxmetrics INTERFACE atomic)
+set(SOURCES
+		bits/value.cpp)
+
+add_library(cxxmetrics ${HEADERS} ${SOURCES})
+target_include_directories(cxxmetrics INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../")
+target_sources_local(cxxmetrics INTERFACE ${HEADERS})
+target_link_libraries(cxxmetrics INTERFACE atomic fmt::fmt)
 
 install(FILES ${HEADERS} DESTINATION "include/cxxmetrics")

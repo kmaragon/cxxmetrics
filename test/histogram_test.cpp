@@ -1,6 +1,6 @@
+#include <../cxxmetrics/state/simple_reservoir.hpp>
 #include <catch2/catch_all.hpp>
 #include <cxxmetrics/histogram.hpp>
-#include <cxxmetrics/simple_reservoir.hpp>
 
 using namespace cxxmetrics;
 using namespace cxxmetrics_literals;

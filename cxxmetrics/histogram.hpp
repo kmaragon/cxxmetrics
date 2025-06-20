@@ -1,7 +1,7 @@
 #ifndef CXXMETRICS_HISTOGRAM_HPP
 #define CXXMETRICS_HISTOGRAM_HPP
 
-#include "counter.hpp"
+#include "state/atomic_counter.hpp"
 #include "uniform_reservoir.hpp"
 
 namespace cxxmetrics

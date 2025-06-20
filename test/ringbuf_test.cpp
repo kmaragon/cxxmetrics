@@ -1,5 +1,5 @@
+#include <../cxxmetrics/bits/atomic/ringbuf.hpp>
 #include <catch2/catch_all.hpp>
-#include <cxxmetrics/ringbuf.hpp>
 
 using namespace std;
 using namespace cxxmetrics::internal;

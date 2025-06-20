@@ -1,8 +1,8 @@
 #ifndef CXXMETRICS_SLIDING_WINDOW_HPP
 #define CXXMETRICS_SLIDING_WINDOW_HPP
 
+#include "bits/atomic/ringbuf.hpp"
 #include "ewma.hpp"
-#include "ringbuf.hpp"
 
 namespace cxxmetrics
 {

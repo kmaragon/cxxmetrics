@@ -4,7 +4,7 @@ project("cxxmetrics_test" CXX)
 find_package(Catch2 REQUIRED)
 find_package(cxxmetrics REQUIRED)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 set(SOURCES
         internal/atomic_lifo_test.cpp

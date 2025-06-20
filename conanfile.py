@@ -8,20 +8,18 @@ import os
 class CxxmetricsConan(ConanFile):
     name = "cxxmetrics"
     description = (
-        "A smallish header-only C++14 library inspired by dropwizard metrics (codahale)"
+        "A C++17 library inspired by dropwizard metrics (codahale) adapted with reasonable contracts for C++"
     )
     license = "Apache 2.0"
     url = "https://github.com/kmaragon/cxxmetrics"
-    settings = ("compiler", "os")
-    options = { "with_prometheus": [True, False] }
-    default_options = { "with_prometheus": True }
-    package_type = "header-library"
+    settings = ("compiler", "os", "build_type", "arch")
+    options = { "with_prometheus": [True, False], "fPIC": [True, False], "shared": [True, False] }
+    default_options = { "with_prometheus": True, "fPIC": True, "shared": False }
     exports_sources = "CMakeLists.txt", "cxxmetrics*"
-    no_copy_source = True
 
     @property
     def _min_cppstd(self):
-        return "14"
+        return "17"
 
     def layout(self):
         basic_layout(self, src_folder=".")
@@ -31,7 +29,7 @@ class CxxmetricsConan(ConanFile):
             check_min_cppstd(self, self._min_cppstd)
 
     def requirements(self):
-        pass
+        self.requires("fmt/[>=10.1.1]")
 
     def package(self):
         copy(self,

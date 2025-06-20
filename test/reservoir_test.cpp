@@ -1,8 +1,8 @@
-#include <catch2/catch_all.hpp>
-#include <cxxmetrics/simple_reservoir.hpp>
-#include <cxxmetrics/uniform_reservoir.hpp>
-#include <cxxmetrics/sliding_window.hpp>
 #include "helpers.hpp"
+#include <../cxxmetrics/state/simple_reservoir.hpp>
+#include <catch2/catch_all.hpp>
+#include <cxxmetrics/sliding_window.hpp>
+#include <cxxmetrics/uniform_reservoir.hpp>
 
 using namespace std;
 using namespace cxxmetrics;

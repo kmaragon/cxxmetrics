@@ -1,7 +1,7 @@
+#include <../cxxmetrics/state/simple_reservoir.hpp>
 #include <catch2/catch_all.hpp>
-#include <sstream>
 #include <cxxmetrics_prometheus/prometheus_publisher.hpp>
-#include <cxxmetrics/simple_reservoir.hpp>
+#include <sstream>
 
 using namespace cxxmetrics;
 using namespace cxxmetrics_literals;

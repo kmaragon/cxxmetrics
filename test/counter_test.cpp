@@ -1,7 +1,7 @@
 #include <catch2/catch_all.hpp>
-#include <cxxmetrics/counter.hpp>
+#include <cxxmetrics/state/counter.hpp>
 
-using namespace cxxmetrics;
+using namespace cxxmetrics::state;
 
 TEST_CASE("Counter incr and wrappers work", "[counter]")
 {
