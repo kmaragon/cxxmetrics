@@ -1,13 +1,14 @@
 #pragma once
 
 #include "../bits/atomic/ringbuf.hpp"
+#include "../bits/time.hpp"
 #include "distribution.hpp"
 
 namespace cxxmetrics::state {
 
 namespace detail {
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 class timed_data {
 
 public:
@@ -44,21 +45,24 @@ private:
   T value_;
 };
 
-template <typename T, typename ClockGet>
-timed_data<T, ClockGet>::timed_data() noexcept : time_{}, value_{} {
+template<typename T, typename ClockGet>
+timed_data<T, ClockGet>::timed_data() noexcept : time_{},
+                                                 value_{} {
   // invalid state constructor
 }
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 timed_data<T, ClockGet>::timed_data(const ClockGet &clock) noexcept
-    : time_(clock()), value_{} {}
+    : time_(clock()),
+      value_{} {}
 
-template <typename T, typename ClockGet>
-timed_data<T, ClockGet>::timed_data(const T &val,
-                                    const ClockGet &clock) noexcept
-    : time_(clock()), value_(val) {}
+template<typename T, typename ClockGet>
+timed_data<T, ClockGet>::timed_data(
+    const T &val, const ClockGet &clock) noexcept
+    : time_(clock()),
+      value_(val) {}
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 bool timed_data<T, ClockGet>::operator<(
     const timed_data &other) const noexcept {
   if (value_ < other.value_)
@@ -68,7 +72,7 @@ bool timed_data<T, ClockGet>::operator<(
   return false;
 };
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 bool timed_data<T, ClockGet>::operator<=(
     const timed_data &other) const noexcept {
   if (value_ < other.value_)
@@ -78,7 +82,7 @@ bool timed_data<T, ClockGet>::operator<=(
   return false;
 };
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 bool timed_data<T, ClockGet>::operator>(
     const timed_data &other) const noexcept {
   if (value_ > other.value_)
@@ -88,7 +92,7 @@ bool timed_data<T, ClockGet>::operator>(
   return false;
 };
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 bool timed_data<T, ClockGet>::operator>=(
     const timed_data &other) const noexcept {
   if (value_ > other.value_)
@@ -98,13 +102,13 @@ bool timed_data<T, ClockGet>::operator>=(
   return false;
 };
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 bool timed_data<T, ClockGet>::operator==(
     const timed_data &other) const noexcept {
   return value_ == other.value_ && time_ == other.time_;
 };
 
-template <typename T, typename ClockGet>
+template<typename T, typename ClockGet>
 bool timed_data<T, ClockGet>::operator!=(
     const timed_data &other) const noexcept {
   return value_ != other.value_ || time_ != other.time_;
@@ -121,7 +125,7 @@ bool timed_data<T, ClockGet>::operator!=(
  * \tparam ClockGet the 'functor' (the C++ kind, not an actual functor) that
  * gets the current time
  */
-template <typename T, size_t Size, typename ClockGet = steady_clock_point>
+template<typename T, size_t Size, typename ClockGet = steady_clock_point>
 class atomic_sliding_window_distribution : public state::distribution<T> {
 public:
   /**
@@ -147,11 +151,13 @@ private:
 
     transform_and_filter_iterator(
         const clock_point &min,
-        const typename detail::ringbuf<detail::timed_data<T, ClockGet>,
-                                       Size>::iterator &real,
-        const typename detail::ringbuf<detail::timed_data<T, ClockGet>,
-                                       Size>::iterator &end) noexcept
-        : min_(min), it_(real), end_(end) {
+        const typename detail::ringbuf<detail::timed_data<T, ClockGet>, Size>::
+            iterator &real,
+        const typename detail::ringbuf<detail::timed_data<T, ClockGet>, Size>::
+            iterator &end) noexcept
+        : min_(min),
+          it_(real),
+          end_(end) {
       while (it_ != end_ && it_->time() < min_)
         ++it_;
     }
@@ -209,24 +215,27 @@ public:
 
   void update(const T &v) noexcept override;
 
-  void get(cxxmetrics::distribution &into) const override;
+  void get(cxxmetrics::distribution &into, bool append = false) const override;
 
   [[nodiscard]] bool is_atomic() const noexcept override { return true; }
 };
 
-template <typename T, size_t Size, typename ClockGet>
+template<typename T, size_t Size, typename ClockGet>
 atomic_sliding_window_distribution<T, Size, ClockGet>::
-    atomic_sliding_window_distribution(const window_type &window,
-                                       const ClockGet &clock) noexcept
-    : clock_(clock), window_(window) {}
+    atomic_sliding_window_distribution(
+        const window_type &window, const ClockGet &clock) noexcept
+    : clock_(clock),
+      window_(window) {}
 
-template <typename T, size_t Size, typename ClockGet>
+template<typename T, size_t Size, typename ClockGet>
 atomic_sliding_window_distribution<T, Size, ClockGet>::
     atomic_sliding_window_distribution(
         const atomic_sliding_window_distribution &other) noexcept
-    : clock_(other.clock_), window_(other.window_), data_(other.data_) {}
+    : clock_(other.clock_),
+      window_(other.window_),
+      data_(other.data_) {}
 
-template <typename T, size_t Size, typename ClockGet>
+template<typename T, size_t Size, typename ClockGet>
 atomic_sliding_window_distribution<T, Size, ClockGet> &
 atomic_sliding_window_distribution<T, Size, ClockGet>::operator=(
     const atomic_sliding_window_distribution &other) noexcept {
@@ -235,16 +244,16 @@ atomic_sliding_window_distribution<T, Size, ClockGet>::operator=(
   window_ = other.window_;
 }
 
-template <typename T, size_t Size, typename ClockGet>
+template<typename T, size_t Size, typename ClockGet>
 void atomic_sliding_window_distribution<T, Size, ClockGet>::update(
     const T &v) noexcept {
   // set up our values for trimming old stuff out
   data_.push(detail::timed_data<T, ClockGet>(v, clock_));
 }
 
-template <typename T, size_t Size, typename ClockGet>
+template<typename T, size_t Size, typename ClockGet>
 void atomic_sliding_window_distribution<T, Size, ClockGet>::get(
-    cxxmetrics::distribution &into) const noexcept {
+    cxxmetrics::distribution &into, bool append) const noexcept {
   auto now = clock_();
   auto min = now - window_;
 
@@ -255,8 +264,12 @@ void atomic_sliding_window_distribution<T, Size, ClockGet>::get(
   auto tend = transform_and_filter_iterator(min, end, end);
 
   auto sz = data_.size();
-  into.clear();
-  into.reserve(sz);
+  if (append) {
+    into.reserve(sz + into.size());
+  } else {
+    into.clear();
+    into.reserve(sz);
+  }
 
   for (; tstart != tend; ++tstart) {
     if (sz-- == 0) {

@@ -8,7 +8,7 @@ namespace cxxmetrics::state {
 /**
  * \brief A type of reservoir that simply keep the Size most recent values
  */
-template <typename T, size_t Size>
+template<typename T, size_t Size>
 class atomic_simple_distribution : public state::distribution<T> {
   atomic::ringbuf<T, Size> data_;
 
@@ -27,18 +27,23 @@ public:
 
   void update(const T &v) noexcept override;
 
-  void get(cxxmetrics::distribution &into) const override;
+  void get(cxxmetrics::distribution &into, bool append = false) const override;
 
   [[nodiscard]] bool is_atomic() const noexcept override { return true; }
 };
 
-template <typename T, size_t Size>
+template<typename T, size_t Size>
 void atomic_simple_distribution<T, Size>::get(
-    cxxmetrics::distribution &into) const {
+    cxxmetrics::distribution &into, bool append) const {
   auto it = data_.begin();
   auto sz = data_.size();
-  into.clear();
-  into.reserve(sz);
+
+  if (append) {
+    into.reserve(into.size() + sz);
+  } else {
+    into.clear();
+    into.reserve(sz);
+  }
 
   for (; it != data_.end(); ++it) {
     if (sz-- == 0)
@@ -48,7 +53,7 @@ void atomic_simple_distribution<T, Size>::get(
   }
 }
 
-template <typename T, size_t Size>
+template<typename T, size_t Size>
 void atomic_simple_distribution<T, Size>::update(const T &v) noexcept {
   data_.push(v);
 }

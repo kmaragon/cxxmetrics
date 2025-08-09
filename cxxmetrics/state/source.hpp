@@ -9,18 +9,20 @@ namespace cxxmetrics::state {
  * \brief The source type
  */
 enum class source_type {
-  /// \brief A value that aggregates by just taking the "latest" value as best
-  /// as can be determined
-  snapshot,
-  /// \brief A value that aggregates by taking a mean of all the matching tags
-  mean,
-  /// \brief A value that is monotonically increasing
-  monotonic,
-  /// \brief A cumulative value that may increase or decrease
-  cumulative,
-  /// \brief A distribution of values from which quantiles and true histograms
-  /// can be derived
-  distribution_value
+  /// \brief A simple value that is not "mergeable" and should just use a "latest" value
+  last_value,
+
+  /// \brief A simple value that is merged via mean
+  mean_value,
+
+  /// \brief A counter type that is monotonically increasing
+  sum_value,
+
+  /// \brief An exponential moving average within some interval over some window
+  ewma,
+
+  /// \brief A distribution of values from which quantiles and true histograms can be derived
+  distribution
 };
 
 /**
@@ -66,8 +68,10 @@ class distribution_source : public source {
 public:
   /**
    * \brief Capture the distribution into the given distribution
+   *
+   * \param append if true, the distribution will not be cleared, just appended
    */
-  virtual void get(distribution &into) const = 0;
+  virtual void get(distribution &into, bool append = false) const = 0;
 };
 
 } // namespace cxxmetrics::state

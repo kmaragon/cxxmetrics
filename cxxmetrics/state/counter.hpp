@@ -7,9 +7,13 @@ namespace cxxmetrics::state {
 /**
  * \brief The base class for a counter state
  */
-template <typename T>
+template<typename T>
 class counter : public value_source {
 public:
+  [[nodiscard]] source_type type() const noexcept override {
+    return source_type::sum_value;
+  }
+
   /**
    * \brief increment the counter by the specified value
    *

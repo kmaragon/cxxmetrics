@@ -5,8 +5,11 @@ namespace cxxmetrics::state {
 
 template<typename T>
 class ewma : public value_source {
-protected:
 public:
+  source_type type() const noexcept override {
+    return source_type::ewma;
+  }
+
   /**
    * \brief Mark the value in the ewma
    *

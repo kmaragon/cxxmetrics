@@ -4,3 +4,4 @@ BinPackParameters: OnePerLine
 AlignAfterOpenBracket: AlwaysBreak
 SpaceAfterTemplateKeyword: false
 PackConstructorInitializers: CurrentLine
+CommentPragmas: ^(@|\\|TODO|FIXME|XXX|-# |- |+ |* )

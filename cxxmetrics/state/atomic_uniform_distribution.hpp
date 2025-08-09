@@ -13,7 +13,7 @@ namespace cxxmetrics::state {
  * \tparam T the type of elements in the reservoir
  * \tparam Size the size of the reservoir
  */
-template <typename T, std::size_t Size>
+template<typename T, std::size_t Size>
 class atomic_uniform_distribution : public state::distribution<T> {
   std::default_random_engine gen_;
   std::array<std::atomic<T>, Size> elems_;
@@ -55,38 +55,41 @@ public:
 
   void update(const T &v) noexcept override;
 
-  void get(cxxmetrics::distribution &into) const override;
+  void get(cxxmetrics::distribution &into, bool append = false) const override;
 
   [[nodiscard]] bool is_atomic() const noexcept override { return true; }
 };
 
-template <typename T, std::size_t Size>
+template<typename T, std::size_t Size>
 atomic_uniform_distribution<T, Size>::atomic_uniform_distribution() noexcept
-    : gen_(generate_seed()), count_(0) {}
+    : gen_(generate_seed()),
+      count_(0) {}
 
-template <typename T, std::size_t Size>
+template<typename T, std::size_t Size>
 atomic_uniform_distribution<T, Size>::atomic_uniform_distribution(
     const atomic_uniform_distribution &other) noexcept
     : gen_(generate_seed()),
       count_(other.count_.exchange(0, std::memory_order_relaxed)) {
   for (std::size_t i = 0; i < count_; i++)
-    elems_[i].store(other.elems_[i].exchange(0, std::memory_order_relaxed),
-                    std::memory_order_relaxed);
+    elems_[i].store(
+        other.elems_[i].exchange(0, std::memory_order_relaxed),
+        std::memory_order_relaxed);
 }
 
-template <typename T, std::size_t Size>
+template<typename T, std::size_t Size>
 atomic_uniform_distribution<T, Size> &
 atomic_uniform_distribution<T, Size>::operator=(
     const atomic_uniform_distribution &other) noexcept {
   for (std::size_t i = 0; i < Size; i++)
-    elems_[i].store(other.elems_[i].load(std::memory_order_relaxed),
-                    std::memory_order_relaxed);
-  count_.store(other.count_.load(std::memory_order_relaxed),
-               std::memory_order_relaxed);
+    elems_[i].store(
+        other.elems_[i].load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
+  count_.store(
+      other.count_.load(std::memory_order_relaxed), std::memory_order_relaxed);
   return *this;
 }
 
-template <typename T, std::size_t Size>
+template<typename T, std::size_t Size>
 void atomic_uniform_distribution<T, Size>::update(const T &value) noexcept {
   auto c = count_.fetch_add(1, std::memory_order_relaxed);
 
@@ -102,16 +105,20 @@ void atomic_uniform_distribution<T, Size>::update(const T &value) noexcept {
   elems_[d(gen_)].store(value, std::memory_order_relaxed);
 }
 
-template <typename T, std::size_t Size>
+template<typename T, std::size_t Size>
 void atomic_uniform_distribution<T, Size>::get(
-    cxxmetrics::distribution &into) const {
+    cxxmetrics::distribution &into, bool append) const {
   auto sz = count_.load(std::memory_order_relaxed);
   if (sz > Size) {
     sz = Size;
   }
 
-  into.clear();
-  into.reserve(sz);
+  if (append) {
+    into.reserve(sz + into.size());
+  } else {
+    into.clear();
+    into.reserve(sz);
+  }
 
   for (std::size_t i = 0; i < sz; i++) {
     into.emplace_back(elems_[i].load(std::memory_order_relaxed), sz);
