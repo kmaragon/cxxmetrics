@@ -8,7 +8,7 @@ import os
 class CxxmetricsConan(ConanFile):
     name = "cxxmetrics"
     description = (
-        "A smallish header-only C++14 library inspired by dropwizard metrics (codahale)"
+        "A C++20 metrics library inspired by dropwizard metrics (codahale)"
     )
     license = "Apache 2.0"
     url = "https://github.com/kmaragon/cxxmetrics"
@@ -21,7 +21,7 @@ class CxxmetricsConan(ConanFile):
 
     @property
     def _min_cppstd(self):
-        return "14"
+        return "20"
 
     def layout(self):
         basic_layout(self, src_folder=".")
@@ -31,7 +31,7 @@ class CxxmetricsConan(ConanFile):
             check_min_cppstd(self, self._min_cppstd)
 
     def requirements(self):
-        pass
+        self.requires("mp-units/2.4.0", transitive_headers=True)
 
     def package(self):
         copy(self,
